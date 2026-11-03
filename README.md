@@ -62,6 +62,14 @@ The flow is stateless: it needs only the scaffolder actions that ship with Devel
 no persistent storage. When Developer Hub runs in the cloud, supply the git tokens through your secret store as
 the `integrations:` environment variables, and allow outbound HTTPS from the pod to the git hosts.
 
+### Documentation (TechDocs)
+
+The Component's `backstage.io/techdocs-ref` is an absolute `url:` pointing at the generated folder, so the docs are
+built from the generated `mkdocs.yaml` and `docs/` and never from any `docs/` or `mkdocs.yml` already in the
+repository. (`dir:.` is not used: TechDocs resolves it against `backstage.io/source-location`, the BW project
+folder.) The Developer Hub host needs `mkdocs` with `mkdocs-techdocs-core` when `techdocs.generator.runIn` is
+`local`, or Docker when it is `docker`.
+
 ### Limitations
 
 * The branch list is static: Backstage's form has no built-in field that lists a repository's real branches

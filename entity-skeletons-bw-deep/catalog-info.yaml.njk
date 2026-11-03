@@ -87,7 +87,9 @@ metadata:
       url: https://docs.tibco.com/products/tibco-activematrix-businessworks
   annotations:
     backstage.io/source-location: ${{ ("url:" + treePre + (folder | replace(" ", "%20")) + treeSuf) | dump }}
-    backstage.io/techdocs-ref: dir:.
+    # Absolute URL of the generated folder. `dir:.` must not be used: TechDocs resolves it against
+    # backstage.io/source-location (the BW project folder), not against this file.
+    backstage.io/techdocs-ref: ${{ ("url:" + treePre + (values.outputFolder | trim) + treeSuf) | dump }}
 {%- if scm == "github" %}
     github.com/project-slug: ${{ (ns + "/" + r.repo) | dump }}
 {%- elif scm == "gitlab" %}
