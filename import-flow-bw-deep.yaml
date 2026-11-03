@@ -27,10 +27,10 @@ spec:
         scm:
           title: Git provider
           type: string
-          default: github
           description: >-
-            Which kind of git server hosts the repository. Needed because self-hosted
-            servers cannot be told apart by their host name.
+            Which kind of git server hosts the repository (required, no default: a wrong
+            choice produces catalog URLs the server does not understand). Needed because
+            self-hosted servers cannot be told apart by their host name.
           enum:
             - github
             - gitlab
