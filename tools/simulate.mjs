@@ -48,6 +48,7 @@ const evalValue = v => {
 const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'bwdeep-'));
 fs.cpSync(projectDir, ws, { recursive: true, filter: s => !/\/(devhub|\.git)(\/|$)/.test(s) && !/(components|system)-OrderProcessing\.yaml$/.test(s) });
 
+if (process.env.STALE_DIR) fs.cpSync(process.env.STALE_DIR, path.join(ws, params.outputFolder), { recursive: true });   // simulate files left by an earlier run
 const regexOf = r => {
   if (typeof r === 'object' && r.regexPattern) return new RegExp(r.regexPattern, r.regexFlags ?? '');
   const p = RegexParser(r); return new RegExp(p.source, p.flags);
@@ -77,12 +78,13 @@ async function extract(inp) {
   return out;
 }
 
-const skelRender = (src, dst, values) => {
+const skelRender = (src, dst, values, replace = false) => {
   const env = mkEnv(new nunjucks.FileSystemLoader(src));
   const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
   for (const f of walk(src)) {
     const rel = path.relative(src, f); const isNjk = rel.endsWith('.njk');
     const target = path.join(dst, isNjk ? rel.slice(0, -4) : rel);
+    if (fs.existsSync(target) && !replace) { console.log('   (skipped existing file, replace is not set):', path.relative(dst, target)); continue; }
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, isNjk ? env.renderString(fs.readFileSync(f, 'utf8'), { values }) : fs.readFileSync(f));
   }
@@ -95,7 +97,7 @@ for (const s of tpl.spec.steps) {
   else if (s.action === 'tibco:extract-parameters') { ctx.steps[s.id] = { output: await extract(input) }; }
   else if (s.action === 'fetch:template') {
     const dst = path.resolve(ws, input.targetPath);
-    skelRender(path.resolve(templateDir, input.url), dst, input.values);
+    skelRender(path.resolve(templateDir, input.url), dst, input.values, input.replace === true);
     console.log('   generated into', input.targetPath);
   }
   else if (s.action === 'tibco:git:push') console.log('   push branch', input.branch, '-', input.commitMessage);

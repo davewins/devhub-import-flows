@@ -1,7 +1,0 @@
-apiVersion: backstage.io/v1alpha1
-kind: System
-metadata:
-  name: order-management-system
-  description: System containing OrderProcessing
-spec:
-  owner: group:default/finance-department

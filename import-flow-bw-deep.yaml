@@ -251,6 +251,9 @@ spec:
         url: ./entity-skeletons-bw-deep/
         targetPath: ${{ parameters.outputFolder }}
         templateFileExtension: true
+        # Re-running the flow must regenerate the files: by default fetch:template skips
+        # files that already exist, which would silently keep the output of an earlier run.
+        replace: true
         values:
           scm: ${{ parameters.scm }}
           repoUrl: ${{ parameters.repoUrl }}
