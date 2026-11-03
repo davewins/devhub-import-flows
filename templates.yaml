@@ -1,0 +1,8 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: devhub-forgejo-templates
+  description: DevHub templates adapted for Forgejo (git.vewins.co.uk)
+spec:
+  targets:
+    - ./import-flow-bw6-forgejo.yaml
