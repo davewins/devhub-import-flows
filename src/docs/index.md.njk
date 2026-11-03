@@ -1,0 +1,62 @@
+{#@@ANALYSIS@@#}
+# ${{ app }}
+
+> Generated from the BusinessWorks project by the DevHub import flow. Regenerate by re-running
+> the import, or edit these pages by hand.
+
+${{ desc }}
+
+| | |
+|---|---|
+| Application | ${{ app }} |
+| Application version | ${{ appver if appver != "" else "n/a" }} |
+| BusinessWorks version | ${{ bwver if bwver != "" else "n/a" }} |
+| Edition | ${{ ("Container Edition (BWCE)" if isCE else (edition if edition != "" else "n/a")) }} |
+| Processes | ${{ values.bw_processes.length }} |
+| Activities | ${{ totalActs }} |
+| REST operations | ${{ restOps }} |
+| Messaging destinations | ${{ dests.length }} |
+| API descriptors | ${{ values.bw_swagger_files.length }} |
+| Shared resources | ${{ values.bw_resources.length }} |
+| Schemas | ${{ values.bw_schemas.length }} |
+| Test files | ${{ (values.bw_tests or []).length }} |
+| Findings | ${{ findings.length }} (${{ nWarn }} warning${{ "" if nWarn == 1 else "s" }}) |
+| Owner | ${{ values.owner }} |
+| System | ${{ values.system }} |
+| Lifecycle | ${{ values.lifecycle }} |
+
+## What it does
+
+{% if restOps > 0 -%}
+- Exposes **${{ restOps }} REST operation${{ "" if restOps == 1 else "s" }}** (see [API](api.md)).
+{% endif -%}
+{% for d in dests -%}
+{% if d.consumers.length > 0 -%}
+- Consumes **${{ d.name }}**: ${{ d.consumers | join(", ") }}.
+{% endif -%}
+{% if d.producers.length > 0 -%}
+- Sends to **${{ d.name }}**: ${{ d.producers | join(", ") }}.
+{% endif -%}
+{% endfor -%}
+{% if procs.length > 0 -%}
+- Is made up of ${{ procs.length }} processes; the [process page](processes.md) shows what triggers each one and what it calls.
+{% endif %}
+
+## Pages
+
+- [Processes](processes.md): triggers, call tree and per-process activity summary
+- [Messaging](messaging.md): queues and topics with their producers and consumers
+- [API](api.md): endpoints and the process that implements each
+- [Resources and configuration](resources.md): shared resources, external dependencies and variables
+- [Schemas](schemas.md): the data contracts
+- [Findings](quality.md): configuration and process issues worth a second look
+
+## Palettes used
+
+{% for p in values.bw_palettes -%}
+{% if p != "name=bwext" -%}
+- `${{ p.replace("name=", "") }}`
+{% endif -%}
+{% else -%}
+No palette information found in the module manifest.
+{% endfor %}

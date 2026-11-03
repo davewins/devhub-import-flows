@@ -184,6 +184,16 @@ spec:
             glob: '**/Schemas/*.xsd'
             regex:
               regexPattern: '\.xsd$'
+          bw_tests:
+            type: workspace
+            glob: '**/Tests/**/*'
+            regex:
+              regexPattern: '\.(ml|bwt|json|xml)$'
+          bw_artifacts:
+            type: workspace
+            glob: '**/*.ear'
+            regex:
+              regexPattern: '\.ear$'
 
     - id: extract
       name: Extract Project Details
@@ -258,6 +268,90 @@ spec:
             filePath: ${{ steps.discover.output.bw_swagger_files[0] }}
             jsonPath: '$.paths'
 
+    # Deep analysis. The two steps below run once per process / schema file (`each`); Backstage collects
+    # every output name into an array with one entry per iteration, in the same order as the file list.
+    - id: module
+      name: Read the Module Descriptor
+      action: tibco:extract-parameters
+      input:
+        failOnError: false
+        sourcePath: ${{ parameters.application_folder }}
+        extractParameters:
+          svc_names:
+            type: xml
+            filePath: ${{ steps.discover.output.bw_module_files[0] }}
+            xPath: "/*/*[local-name()='service']/@name"
+          svc_paths:
+            type: xml
+            filePath: ${{ steps.discover.output.bw_module_files[0] }}
+            xPath: "/*/*[local-name()='service']/*[local-name()='binding']/@path"
+          ref_names:
+            type: xml
+            filePath: ${{ steps.discover.output.bw_module_files[0] }}
+            xPath: "/*/*[local-name()='reference']/@name"
+
+    - id: processes
+      name: Analyse Each Process
+      action: tibco:extract-parameters
+      each: ${{ steps.discover.output.bw_processes }}
+      input:
+        failOnError: true
+        sourcePath: ${{ parameters.application_folder }}
+        extractParameters:
+          p_name:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "string(/*/@name)"
+          p_types:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='BWActivity']/@activityTypeID"
+          p_type_names:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='BWActivity']/ancestor::*[@name][1]/@name"
+          p_acts:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='BWActivity'][not(starts-with(@activityTypeID,'bw.internal.')) and not(starts-with(@activityTypeID,'bw.generalactivities.'))]"
+          p_act_names:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='BWActivity'][not(starts-with(@activityTypeID,'bw.internal.')) and not(starts-with(@activityTypeID,'bw.generalactivities.'))]/ancestor::*[@name][1]/@name"
+          p_calls:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='CallProcess']/@subProcessName"
+          p_rest_ops:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='onMessage']/@operation"
+          p_rest_links:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='onMessage']/@partnerLink"
+          p_catch:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "string(count(//*[local-name()='catch' or local-name()='catchAll']))"
+
+    - id: schemas
+      name: Read the Schemas
+      action: tibco:extract-parameters
+      each: ${{ steps.discover.output.bw_schemas }}
+      input:
+        failOnError: true
+        sourcePath: ${{ parameters.application_folder }}
+        extractParameters:
+          s_elems:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "/*/*[local-name()='element']/@name"
+          s_types:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "/*/*[local-name()='complexType' or local-name()='simpleType']/@name"
+
     - id: generate
       name: Generate Catalog Entities and Docs
       action: fetch:template
@@ -300,6 +394,22 @@ spec:
           bw_api_version: ${{ steps.extract.output.bw_api_version }}
           bw_api_base_path: ${{ steps.extract.output.bw_api_base_path }}
           bw_api_paths: ${{ steps.extract.output.bw_api_paths }}
+          bw_svc_names: ${{ steps.module.output.svc_names }}
+          bw_svc_paths: ${{ steps.module.output.svc_paths }}
+          bw_ref_names: ${{ steps.module.output.ref_names }}
+          bw_p_name: ${{ steps.processes.output.p_name }}
+          bw_p_types: ${{ steps.processes.output.p_types }}
+          bw_p_type_names: ${{ steps.processes.output.p_type_names }}
+          bw_p_acts: ${{ steps.processes.output.p_acts }}
+          bw_p_act_names: ${{ steps.processes.output.p_act_names }}
+          bw_p_calls: ${{ steps.processes.output.p_calls }}
+          bw_p_rest_ops: ${{ steps.processes.output.p_rest_ops }}
+          bw_p_rest_links: ${{ steps.processes.output.p_rest_links }}
+          bw_p_catch: ${{ steps.processes.output.p_catch }}
+          bw_s_elems: ${{ steps.schemas.output.s_elems }}
+          bw_s_types: ${{ steps.schemas.output.s_types }}
+          bw_tests: ${{ steps.discover.output.bw_tests }}
+          bw_artifacts: ${{ steps.discover.output.bw_artifacts }}
 
     - id: push
       name: Commit the Generated Files

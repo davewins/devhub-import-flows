@@ -10,6 +10,8 @@ import jp from 'jsonpath';
 import RegexParser from 'regex-parser';
 import { XMLParser } from 'fast-xml-parser';
 import { glob } from 'glob';
+import { select as xpathSelect } from 'xpath';
+import { DOMParser } from '@xmldom/xmldom';
 import * as cm from '@backstage/catalog-model';
 
 const [, , projectDir, paramsFile, templateDir = '..'] = process.argv;
@@ -61,7 +63,10 @@ async function extract(inp) {
       const abs = f => { const a = path.resolve(root, f); if (!a.startsWith(ws)) throw new Error('path escapes workspace: ' + f); if (a.split(path.sep).includes('.git')) throw new Error('.git blocked'); return a; };
       if (p.type === 'xml') {
         const c = fs.readFileSync(abs(p.filePath), 'utf8');
-        out[key] = jp.query(new XMLParser({ ignoreAttributes: false }).parse(c), p.jsonPath);
+        if (p.xPath) {   // same as the real action: serialise every selected node
+          const nodes = xpathSelect(p.xPath, new DOMParser({ errorHandler: () => {} }).parseFromString(c, 'text/xml'), false);
+          out[key] = Array.isArray(nodes) ? nodes.map(n => n.toString()) : [nodes];
+        } else out[key] = jp.query(new XMLParser({ ignoreAttributes: false }).parse(c), p.jsonPath);
       } else if (p.type === 'json') {
         out[key] = jp.query(JSON.parse(fs.readFileSync(abs(p.filePath), 'utf8')), p.jsonPath);
       } else if (p.type === 'file') {
@@ -91,10 +96,22 @@ const skelRender = (src, dst, values, replace = false) => {
 };
 
 for (const s of tpl.spec.steps) {
-  const input = evalValue(s.input);
+  const input = s.each !== undefined ? undefined : evalValue(s.input);
   console.log(`-> step ${s.id} (${s.action})`);
   if (s.action === 'tibco:git:clone') console.log('   clone', input.repoUrl, 'branch', input.branch);
-  else if (s.action === 'tibco:extract-parameters') { ctx.steps[s.id] = { output: await extract(input) }; }
+  else if (s.action === 'tibco:extract-parameters') {
+    if (s.each !== undefined) {
+      // Backstage runs the step once per item and collects each output name into an array (NunjucksWorkflowRunner)
+      const items = evalValue(s.each); const agg = {};
+      for (const [k, v] of Object.entries(items)) {
+        ctx.each = { key: k, value: v };
+        const o = await extract(evalValue(s.input));
+        for (const [name, val] of Object.entries(o)) (agg[name] ||= []).push(val);
+      }
+      delete ctx.each; ctx.steps[s.id] = { output: agg };
+    } else ctx.steps[s.id] = { output: await extract(input) };
+    for (const [k, v] of Object.entries(ctx.steps[s.id].output)) for (const x of [v].flat(Infinity)) if (typeof x !== 'string') console.log(`   [warn] output ${s.id}.${k} contains a non-string value (${typeof x}); the action's output schema is string arrays`);
+  }
   else if (s.action === 'fetch:template') {
     const dst = path.resolve(ws, input.targetPath);
     skelRender(path.resolve(templateDir, input.url), dst, input.values, input.replace === true);
@@ -103,6 +120,7 @@ for (const s of tpl.spec.steps) {
   else if (s.action === 'tibco:git:push') console.log('   push branch', input.branch, '-', input.commitMessage);
   else if (s.action === 'catalog:register') { console.log('   register', input.catalogInfoUrl); ctx.steps[s.id] = { output: { entityRef: 'component:default/x' } }; }
 }
+if (process.env.DUMP_STEPS) fs.writeFileSync(process.env.DUMP_STEPS, JSON.stringify(ctx.steps, null, 1));
 const outDir = path.resolve(ws, params.outputFolder);
 console.log('\n==== workspace output:', outDir);
 for (const f of fs.readdirSync(outDir, { recursive: true })) console.log('  ', f);
@@ -119,3 +137,4 @@ for (const d of docs) {
 }
 console.log('\nentities:', kinds, bad ? `\n${bad} PROBLEM(S)` : '\nALL ENTITIES VALID');
 console.log('workspace kept at', ws);
+if (process.env.WS_FILE) fs.writeFileSync(process.env.WS_FILE, ws);

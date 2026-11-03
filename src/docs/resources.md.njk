@@ -1,0 +1,43 @@
+{#@@ANALYSIS@@#}
+# Resources and configuration
+
+## Shared resources
+
+{% for f in values.bw_resources -%}
+{%- set file = f.split("/") | last -%}
+- **${{ file.split(".")[0] }}** (`${{ file.split(".") | last }}`) in `${{ f }}`
+{% else -%}
+No shared resources found.
+{% endfor %}
+
+## Configuration variables
+
+Values from the application's default profile, falling back to the module defaults. Names that
+look like secrets, and any value that is an obfuscated password or a `%%placeholder%%`, are left
+out on purpose.
+
+| Variable | Value |
+|---|---|
+{% for x in vars -%}
+{%- set n = x.n -%}{%- set v = x.v -%}
+{%- set ln = n | lower -%}
+{%- if not ("pass" in ln) and not ("secret" in ln) and not ("token" in ln) and not ("credential" in ln) and not ("key" in ln) -%}
+{%- if not (v is string and (v.startsWith("#!") or v.startsWith("%%"))) -%}
+| `${{ n }}` | ${{ ("`" + (v | string) + "`") if (v | string) != "" else "_(empty)_" }} |
+{% endif -%}
+{%- endif -%}
+{%- endfor %}
+
+## Systems the processes talk to
+
+Activities other than core and general activities, with their connection resource where one is named.
+
+{% if extActs.length == 0 -%}
+No such activities were found.
+{% else -%}
+| Process | Activity | Type | Connection | Detail |
+|---|---|---|---|---|
+{% for e in extActs -%}
+| ${{ e.proc }} | ${{ e.name if e.name != "" else "-" }} | `${{ e.type }}` | ${{ e.conn if e.conn != "" else "-" }} | ${{ (e.detail if e.detail != "" else "-") | replace("|", "/") }} |
+{% endfor %}
+{% endif %}

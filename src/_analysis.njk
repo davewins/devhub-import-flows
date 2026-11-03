@@ -1,0 +1,237 @@
+{#- Computes locations, names and lists; everything below is generated from the BW project. -#}
+{%- set r = values.repoUrl | parseRepoUrl -%}
+{%- set scm = values.scm -%}
+{%- set host = r.host -%}
+{#- namespace in the repository path: owner/group, Bitbucket Cloud workspace, or Bitbucket Server project key -#}
+{%- set ns = r.workspace if scm == "bitbucket-cloud" else (r.project if scm == "bitbucket-server" else r.owner) -%}
+{%- set webBase = ("https://" + host + "/projects/" + ns + "/repos/" + r.repo) if scm == "bitbucket-server" else ("https://" + host + "/" + ns + "/" + r.repo) -%}
+{#- file URL = blobPre + path + blobSuf ; folder URL = treePre + path + treeSuf -#}
+{%- set blobSuf = ("?at=refs/heads/" + values.branch) if scm == "bitbucket-server" else "" -%}
+{%- set treeSuf = blobSuf -%}
+{%- if scm == "github" -%}
+  {%- set blobPre = webBase + "/blob/" + values.branch + "/" -%}
+  {%- set treePre = webBase + "/tree/" + values.branch + "/" -%}
+{%- elif scm == "gitlab" -%}
+  {%- set blobPre = webBase + "/-/blob/" + values.branch + "/" -%}
+  {%- set treePre = webBase + "/-/tree/" + values.branch + "/" -%}
+{%- elif scm == "bitbucket-cloud" -%}
+  {%- set blobPre = webBase + "/src/" + values.branch + "/" -%}
+  {%- set treePre = blobPre -%}
+{%- elif scm == "bitbucket-server" -%}
+  {%- set blobPre = webBase + "/browse/" -%}
+  {%- set treePre = blobPre -%}
+{%- else -%}
+  {%- set blobPre = webBase + "/src/branch/" + values.branch + "/" -%}
+  {%- set treePre = blobPre -%}
+{%- endif -%}
+{%- set repoWeb = webBase -%}
+{%- set folder = "" if (values.application_folder == "." or values.application_folder == "") else values.application_folder + "/" -%}
+{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split("/") | last) -%}
+{%- set appId = app | replace(" ", "-") -%}
+{%- set lid = appId | lower -%}
+{%- set edition = values.bw_edition[1] if (values.bw_edition and values.bw_edition[1]) else "" -%}
+{%- set isCE = (edition == "bwcf" or edition == "bwce") -%}
+{%- set bwver = values.bw_version[1] if (values.bw_version and values.bw_version[1]) else "" -%}
+{%- set appver = (values.bw_app_version[1] | replace(".qualifier", "")) if (values.bw_app_version and values.bw_app_version[1]) else "" -%}
+{#- Configuration variables: the application's deployed profile wins over the module's defaults. -#}
+{%- set vars = [] -%}
+{%- set seen = [] -%}
+{%- for n in values.bw_gv_names -%}
+  {%- if not n.startsWith("//") and not n.startsWith("BW.") and n not in seen -%}{%- set _ = seen.push(n) -%}{%- set _ = vars.push({ "n": n, "v": values.bw_gv_values[loop.index0] }) -%}{%- endif -%}
+{%- endfor -%}
+{%- for n in values.bw_mod_gv_names -%}
+  {%- if not n.startsWith("//") and not n.startsWith("BW.") and n not in seen -%}{%- set _ = seen.push(n) -%}{%- set _ = vars.push({ "n": n, "v": values.bw_mod_gv_values[loop.index0] }) -%}{%- endif -%}
+{%- endfor -%}
+{%- set brokerUrl = "" -%}
+{%- set jdbcUrl = "" -%}
+{%- set queues = [] -%}
+{%- for x in vars -%}
+  {%- set n = x.n -%}{%- set v = x.v -%}
+  {%- if v is string and v != "" -%}
+    {%- if brokerUrl == "" and (v.startsWith("tcp://") or v.startsWith("ssl://")) -%}{%- set brokerUrl = v -%}{%- endif -%}
+    {%- if jdbcUrl == "" and v.startsWith("jdbc:") -%}{%- set jdbcUrl = v.split("?")[0] -%}{%- endif -%}
+    {%- if (n | lower).endsWith("queue") or (n | lower).endsWith("topic") -%}{%- set _ = queues.push({ "var": n, "name": v, "topic": (n | lower).endsWith("topic") }) -%}{%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{#- ===== process analysis (everything below is derived from the .bwp / module.bwm / schema files) ===== -#}
+{%- set varNames = [] -%}{%- set varVals = [] -%}
+{%- for x in vars -%}{%- set _ = varNames.push(x.n) -%}{%- set _ = varVals.push(x.v) -%}{%- endfor -%}
+{%- set svcNames = [] -%}{%- set svcPaths = [] -%}
+{%- for s in (values.bw_svc_names or []) -%}{%- set _ = svcNames.push(s.split('"')[1]) -%}{%- endfor -%}
+{%- for s in (values.bw_svc_paths or []) -%}{%- set _ = svcPaths.push(s.split('"')[1]) -%}{%- endfor -%}
+{%- set pfull = [] -%}{%- set pshort = [] -%}
+{%- for f in values.bw_processes -%}
+  {%- set pn = (values.bw_p_name[loop.index0][0] if (values.bw_p_name and values.bw_p_name[loop.index0] and values.bw_p_name[loop.index0][0]) else ((f.split("/") | last).replace(".bwp", ""))) -%}
+  {%- set _ = pfull.push(pn) -%}{%- set _ = pshort.push(pn.split(".") | last) -%}
+{%- endfor -%}
+{#- destinations: configuration variables first, then any destination only named inside an activity -#}
+{%- set dests = [] -%}{%- set destNames = [] -%}
+{%- for q in queues -%}{%- set _ = dests.push({ "name": q.name, "var": q["var"], "topic": q.topic, "producers": [], "consumers": [] }) -%}{%- set _ = destNames.push(q.name) -%}{%- endfor -%}
+{%- set procs = [] -%}
+{%- set typeNames = [] -%}{%- set typeCounts = [] -%}
+{%- set extActs = [] -%}
+{%- set restEps = [] -%}
+{%- set findings = [] -%}
+{%- set totalActs = 0 -%}{%- set totalCatches = 0 -%}{%- set logActs = 0 -%}
+{%- for f in values.bw_processes -%}
+  {%- set i = loop.index0 -%}
+  {%- set pname = pshort[i] -%}
+  {%- set types = [] -%}{%- set tnames = [] -%}
+  {%- for t in ((values.bw_p_types[i] if values.bw_p_types else []) or []) -%}
+    {%- set ty = t.split('"')[1] -%}{%- set _ = types.push(ty) -%}
+    {%- set _ = tnames.push(((values.bw_p_type_names[i][loop.index0].split('"')[1]) if (values.bw_p_type_names and values.bw_p_type_names[i] and values.bw_p_type_names[i][loop.index0]) else "")) -%}
+    {%- set k = typeNames.indexOf(ty) -%}
+    {%- if k < 0 -%}{%- set _ = typeNames.push(ty) -%}{%- set _ = typeCounts.push(1) -%}{%- else -%}{%- set _ = typeCounts.splice(k, 1, typeCounts[k] + 1) -%}{%- endif -%}
+    {%- set totalActs = totalActs + 1 -%}
+    {%- if ty.endsWith(".log") -%}{%- set logActs = logActs + 1 -%}{%- endif -%}
+  {%- endfor -%}
+  {%- set calls = [] -%}
+  {%- for c in ((values.bw_p_calls[i] if values.bw_p_calls else []) or []) -%}{%- set cn = (c.split('"')[1].split(".")) | last -%}{%- if cn not in calls -%}{%- set _ = calls.push(cn) -%}{%- endif -%}{%- endfor -%}
+  {%- set jmsIn = [] -%}{%- set jmsOut = [] -%}{%- set ext = [] -%}
+  {%- for a in ((values.bw_p_acts[i] if values.bw_p_acts else []) or []) -%}
+    {%- set an = ((values.bw_p_act_names[i][loop.index0].split('"')[1]) if (values.bw_p_act_names and values.bw_p_act_names[i] and values.bw_p_act_names[i][loop.index0]) else "") -%}
+    {%- set aty = (a.match(r/activityTypeID="([^"]*)"/) or ["", ""])[1] -%}
+    {%- set dtag = a.match(r/<attributeBindings[^>]*eAttributeName="destinationName"[^>]*>/) -%}
+    {%- set dvar = ((dtag[0].match(r/processProperty="([^"]*)"/) or ["", ""])[1]) if dtag else "" -%}
+    {%- set dlit = (a.match(r/destinationName="([^"]*)"/) or ["", ""])[1] -%}
+    {%- set style = (a.match(r/messagingStyle="([^"]*)"/) or ["", ""])[1] -%}
+    {%- set conn = (a.match(r/(?:connectionReference|jdbcSharedResource|httpClientResource|sharedResource|resource)="([^"]*)"/) or ["", ""])[1] -%}
+    {%- set where = (a.match(r/(?:requestURI|url|URL|endpointURL|resourcePath|path|operationName|serviceName)="([^"]*)"/) or ["", ""])[1] -%}
+    {%- set sql = (a.match(r/(?:statement|sqlStatement|query)="([^"]*)"/) or ["", ""])[1] -%}
+    {%- set dname = (varVals[varNames.indexOf(dvar)] if (dvar != "" and dvar in varNames) else dlit) -%}
+    {%- set atl = aty | lower -%}
+    {%- set kind = "" -%}
+    {%- if atl.startsWith("bw.jms.") -%}
+      {%- if ("requestreply" in atl) -%}{%- set kind = "request" -%}
+      {%- elif ("send" in atl) or ("publish" in atl) -%}{%- set kind = "send" -%}
+      {%- elif ("receive" in atl) or ("get" in atl) or ("wait" in atl) or ("listen" in atl) -%}{%- set kind = "receive" -%}
+      {%- endif -%}
+    {%- endif -%}
+    {%- if kind != "" and dname != "" and (dname | string) != "" -%}
+      {%- set dn = dname | string -%}
+      {%- set di = destNames.indexOf(dn) -%}
+      {%- if di < 0 -%}{%- set _ = dests.push({ "name": dn, "var": dvar, "topic": (style == "Topic"), "producers": [], "consumers": [] }) -%}{%- set _ = destNames.push(dn) -%}{%- set di = destNames.length - 1 -%}{%- endif -%}
+      {%- if kind == "receive" -%}
+        {%- if pname not in dests[di].consumers -%}{%- set _ = dests[di].consumers.push(pname) -%}{%- endif -%}{%- if dn not in jmsIn -%}{%- set _ = jmsIn.push(dn) -%}{%- endif -%}
+      {%- else -%}
+        {%- if pname not in dests[di].producers -%}{%- set _ = dests[di].producers.push(pname) -%}{%- endif -%}{%- if dn not in jmsOut -%}{%- set _ = jmsOut.push(dn) -%}{%- endif -%}
+      {%- endif -%}
+    {%- endif -%}
+    {%- set detail = (("destination " + (dname | string)) if (dname | string) != "" else (where if where != "" else "")) -%}
+    {%- set _ = ext.push({ "name": an, "type": aty, "conn": conn, "detail": detail, "sql": sql, "kind": kind }) -%}
+    {%- set _ = extActs.push({ "proc": pname, "name": an, "type": aty, "conn": conn, "detail": detail, "sql": sql, "kind": kind }) -%}
+  {%- endfor -%}
+  {%- set ops = [] -%}
+  {%- for o in ((values.bw_p_rest_ops[i] if values.bw_p_rest_ops else []) or []) -%}
+    {%- set link = ((values.bw_p_rest_links[i][loop.index0].split('"')[1]) if (values.bw_p_rest_links and values.bw_p_rest_links[i] and values.bw_p_rest_links[i][loop.index0]) else "") -%}
+    {%- set si = svcNames.indexOf(link) -%}
+    {%- if si >= 0 -%}{%- set _ = restEps.push({ "verb": (o.split('"')[1] | upper), "path": svcPaths[si], "proc": pname }) -%}{%- set _ = ops.push((o.split('"')[1] | upper) + " " + svcPaths[si]) -%}{%- endif -%}
+  {%- endfor -%}
+  {%- set ncatch = ((values.bw_p_catch[i][0] | int) if (values.bw_p_catch and values.bw_p_catch[i] and values.bw_p_catch[i][0]) else 0) -%}
+  {%- set totalCatches = totalCatches + ncatch -%}
+  {%- set lifecycle = ("onStartup" in (values.bw_p_rest_ops[i] | join(" "))) if (values.bw_p_rest_ops and values.bw_p_rest_ops[i]) else false -%}
+  {%- set timers = [] -%}
+  {%- for ty in types -%}{%- if ("timer" in (ty | lower)) -%}{%- set _ = timers.push(ty) -%}{%- endif -%}{%- endfor -%}
+  {%- set _ = procs.push({ "name": pname, "full": pfull[i], "file": f, "types": types, "tnames": tnames, "calls": calls, "ext": ext, "ops": ops, "jmsIn": jmsIn, "jmsOut": jmsOut, "catches": ncatch, "lifecycle": lifecycle, "timers": timers, "calledBy": [] }) -%}
+{%- endfor -%}
+{%- for p in procs -%}
+  {%- for c in p.calls -%}{%- set ci = pshort.indexOf(c) -%}{%- if ci >= 0 and p.name not in procs[ci].calledBy -%}{%- set _ = procs[ci].calledBy.push(p.name) -%}{%- endif -%}{%- endfor -%}
+{%- endfor -%}
+{#- trigger label per process (parallel arrays), and the entry points the call tree starts from -#}
+{%- set trigText = [] -%}{%- set trigKind = [] -%}{%- set roots = [] -%}
+{%- for p in procs -%}
+  {%- set trig = [] -%}
+  {%- if p.ops.length > 0 -%}{%- set _ = trig.push("REST " + (p.ops | join(", "))) -%}{%- endif -%}
+  {%- if p.jmsIn.length > 0 -%}{%- set _ = trig.push("JMS " + (p.jmsIn | join(", "))) -%}{%- endif -%}
+  {%- if p.timers.length > 0 -%}{%- set _ = trig.push("Timer") -%}{%- endif -%}
+  {%- if p.lifecycle -%}{%- set _ = trig.push("Module start/stop") -%}{%- endif -%}
+  {%- set kindOf = "entry" -%}
+  {%- if trig.length == 0 -%}
+    {%- if p.calledBy.length > 0 -%}{%- set _ = trig.push("Sub-process, called by " + (p.calledBy | join(", "))) -%}{%- set kindOf = "sub" -%}
+    {%- else -%}{%- set _ = trig.push("Not referenced by any trigger or process") -%}{%- set kindOf = "orphan" -%}{%- endif -%}
+  {%- endif -%}
+  {%- set _ = trigText.push(trig | join("; ")) -%}{%- set _ = trigKind.push(kindOf) -%}
+  {%- if kindOf != "sub" -%}{%- set _ = roots.push(loop.index0) -%}{%- endif -%}
+{%- endfor -%}
+{#- call tree: iterative depth-first walk (nunjucks has no recursion without macros), 4 spaces per level for Markdown -#}
+{%- set treeLines = [] -%}
+{%- for root in roots -%}
+  {%- set stack = [{ "i": root, "d": 0 }] -%}
+  {%- for step in range(300) -%}
+    {%- if stack.length > 0 -%}
+      {%- set cur = stack.pop() -%}
+      {%- set cp = procs[cur.i] -%}
+      {%- set _ = treeLines.push("    ".repeat(cur.d) + "- **" + cp.name + "**" + ((" (" + trigText[cur.i] + ")") if cur.d == 0 else "")) -%}
+      {%- if cur.d < 6 -%}
+        {%- set kids = [] -%}
+        {%- for c in cp.calls -%}{%- set ci = pshort.indexOf(c) -%}{%- if ci >= 0 -%}{%- set _ = kids.unshift({ "i": ci, "d": cur.d + 1 }) -%}{%- endif -%}{%- endfor -%}
+        {%- for kid in kids -%}{%- set _ = stack.push(kid) -%}{%- endfor -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endfor -%}
+{#- REST operations, grouped, and the totals used in the summaries -#}
+{%- set restOps = restEps.length -%}
+{%- set jmsDestCount = dests.length -%}
+{#- ---- findings: things worth a second look, derived from configuration and process structure ---- -#}
+{%- set nObf = 0 -%}
+{%- for x in vars -%}
+  {%- set n = x.n -%}{%- set v = x.v -%}{%- set ln = n | lower -%}
+  {%- if v is string and v != "" -%}
+    {%- if v.startsWith("#!") -%}{%- set nObf = nObf + 1 -%}
+    {%- elif v.startsWith("%%") -%}
+    {%- else -%}
+      {%- if v.match(r/(^|[^0-9.])((10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})([^0-9]|$)/) -%}
+        {%- set _ = findings.push({ "level": "Warning", "area": "Configuration", "text": "`" + n + "` holds a hardcoded private IP address. Prefer a host name or an environment-specific value." }) -%}
+      {%- endif -%}
+      {%- if v.startsWith("http://") and not ("localhost" in v) -%}
+        {%- set _ = findings.push({ "level": "Info", "area": "Configuration", "text": "`" + n + "` is an unencrypted http:// URL." }) -%}
+      {%- endif -%}
+      {%- if ("localhost" in v) or v.startsWith("127.") -%}
+        {%- set _ = findings.push({ "level": "Info", "area": "Configuration", "text": "`" + n + "` points at localhost, which will not work once deployed." }) -%}
+      {%- endif -%}
+      {%- if ("pass" in ln) or ("secret" in ln) or ("token" in ln) or ("credential" in ln) -%}
+        {%- set _ = findings.push({ "level": "Warning", "area": "Security", "text": "`" + n + "` looks like a secret but holds a plain value (not shown here). Use an obfuscated password or a secret store." }) -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if nObf > 0 -%}{%- set _ = findings.push({ "level": "Info", "area": "Security", "text": nObf + " obfuscated password value(s) are present in the configuration. Obfuscation is not encryption, and the values are never copied into the catalog." }) -%}{%- endif -%}
+{%- set sleepish = [] -%}
+{%- for p in procs -%}
+  {%- for ty in p.types -%}
+    {%- if ty.endsWith(".sleep") and p.tnames[loop.index0] and p.tnames[loop.index0].match(r/(database|db|query|insert|update|select|call|service|api|http|send|lookup)/i) -%}
+      {%- set _ = sleepish.push(p.name + "." + p.tnames[loop.index0]) -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- if totalCatches > 0 and p.catches == 0 and p.ext.length > 0 -%}
+    {%- set _ = findings.push({ "level": "Info", "area": "Reliability", "text": "`" + p.name + "` calls external systems (" + p.ext.length + " activit" + ("y" if p.ext.length == 1 else "ies") + ") but has no fault handler, unlike other processes in this application." }) -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if sleepish.length > 0 -%}{%- set _ = findings.push({ "level": "Warning", "area": "Process", "text": sleepish.length + " Sleep activit" + ("y" if sleepish.length == 1 else "ies") + " carry names that suggest real work (" + (sleepish | join(", ")) + "). If these are placeholders for database or service calls, replace them with the real activities." }) -%}{%- endif -%}
+{%- for p in procs -%}
+  {%- if trigKind[loop.index0] == "orphan" -%}
+    {%- set _ = findings.push({ "level": "Info", "area": "Process", "text": "`" + p.name + "` is not called by any process and has no trigger of its own. It may be dead code." }) -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if procs.length > 0 and logActs == 0 -%}{%- set _ = findings.push({ "level": "Info", "area": "Operability", "text": "No process contains a Log activity, so the application writes no application-level log messages." }) -%}{%- endif -%}
+{%- if procs.length > 0 and totalCatches == 0 -%}{%- set _ = findings.push({ "level": "Warning", "area": "Reliability", "text": "None of the " + procs.length + " processes defines a fault handler. Errors will be handled only by the engine defaults." }) -%}{%- endif -%}
+{%- if (values.bw_tests or []).length == 0 -%}{%- set _ = findings.push({ "level": "Info", "area": "Testing", "text": "No BusinessWorks test suites were found under a Tests folder." }) -%}{%- endif -%}
+{%- set nWarn = 0 -%}{%- for fnd in findings -%}{%- if fnd.level == "Warning" -%}{%- set nWarn = nWarn + 1 -%}{%- endif -%}{%- endfor -%}
+{%- set brokerId = lid + "-ems-broker" -%}
+{%- set dbId = lid + "-database" -%}
+{%- set resRefs = [] -%}
+{%- set apiRefs = [] -%}
+{%- if brokerUrl != "" -%}{%- set _ = resRefs.push("resource:default/" + brokerId) -%}{%- endif -%}
+{%- if jdbcUrl != "" -%}{%- set _ = resRefs.push("resource:default/" + dbId) -%}{%- endif -%}
+{%- for q in dests -%}{%- set _ = resRefs.push("resource:default/" + lid + "-queue-" + (q.name | lower | replace(" ", "-"))) -%}{%- endfor -%}
+{%- for f in values.bw_resources -%}{%- set _ = resRefs.push("resource:default/" + lid + "-" + ((f.split("/") | last).split(".")[0] | lower)) -%}{%- endfor -%}
+{%- for f in values.bw_swagger_files -%}{%- set _ = apiRefs.push("api:default/" + lid + "-" + ((f.split("/") | last).split(".")[0] | lower)) -%}{%- endfor -%}
+{%- set tags = ["tibco", "businessworks", ("bwce" if isCE else "bw6")] -%}
+{%- for p in values.bw_palettes -%}
+  {%- set t = p.replace("name=bw.", "").replace("name=bw", "") | lower -%}
+  {%- if t != "" and t != "ext" and t != "generalactivities" and t not in tags -%}{%- set _ = tags.push(t) -%}{%- endif -%}
+{%- endfor -%}
+{%- if dests.length > 0 and "messaging" not in tags -%}{%- set _ = tags.push("messaging") -%}{%- endif -%}
+{%- if restOps > 0 and "rest" not in tags -%}{%- set _ = tags.push("rest") -%}{%- endif -%}
+{%- set desc = values.bw_app_description[0] if (values.bw_app_description and values.bw_app_description[0]) else ("TIBCO BusinessWorks " + ("Container Edition " if isCE else "") + "application " + app + (" " + appver if appver != "" else "") + " with " + (values.bw_processes.length | string) + " process(es)" + (" providing the " + values.bw_api_title[0] if (values.bw_api_title and values.bw_api_title[0]) else "") + ".") -%}

@@ -1,0 +1,49 @@
+{#@@ANALYSIS@@#}
+# Processes
+
+${{ procs.length }} process${{ "" if procs.length == 1 else "es" }} with ${{ totalActs }} palette activities (calls to other processes are listed under *Calls*).
+
+## Inventory
+
+| Process | Triggered by | Activities | Calls | Fault handlers |
+|---|---|---|---|---|
+{% for p in procs -%}
+| ${{ p.name }} | ${{ trigText[loop.index0] | replace("|", "/") }} | ${{ p.types.length }} | ${{ (p.calls | join(", ")) if p.calls.length > 0 else "-" }} | ${{ p.catches }} |
+{% endfor %}
+
+## Call tree
+
+Each entry point (REST operation, JMS receiver, timer, module activator) and the processes it calls, in call order.
+
+{% for l in treeLines -%}
+${{ l }}
+{% else -%}
+No processes found.
+{% endfor %}
+
+## Process details
+
+{% for p in procs -%}
+{%- set seenT = [] -%}
+{%- for t in p.types -%}{%- if t not in seenT -%}{%- set _ = seenT.push(t) -%}{%- endif -%}{%- endfor -%}
+### ${{ p.name }}
+
+- File: `${{ p.file }}`
+- Triggered by: ${{ trigText[loop.index0] }}
+{% if p.calledBy.length > 0 -%}
+- Called by: ${{ p.calledBy | join(", ") }}
+{% endif -%}
+{% if seenT.length > 0 -%}
+- Activities:
+{% for t in seenT -%}
+{%- set cnt = 0 -%}{%- for u in p.types -%}{%- if u == t -%}{%- set cnt = cnt + 1 -%}{%- endif -%}{%- endfor -%}
+${{ '    ' }}- `${{ t }}` x ${{ cnt }}
+{% endfor -%}
+{% endif -%}
+{% if p.ext.length > 0 -%}
+- Activities that talk to other systems:
+{% for e in p.ext -%}
+${{ '    ' }}- **${{ e.name if e.name != "" else e.type }}** (`${{ e.type }}`)${{ (": " + e.detail) if e.detail != "" else "" }}${{ (", connection `" + e.conn + "`") if e.conn != "" else "" }}
+{% endfor -%}
+{% endif %}
+{% endfor %}

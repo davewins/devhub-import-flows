@@ -11,7 +11,14 @@ catalog entries from what is in the project, commits them to the repository and 
 | `Service Descriptors/*.json` (OpenAPI / Swagger) | **API** entities whose definition is read live from the repository, linked to the Component (`providesApis`) |
 | `Resources/**/*Resource` shared resources | **Resource** per JMS connection, HTTP connector, JDBC connection and so on |
 | `META-INF/default.substvar` (application profile over module defaults) | **Resource** for the EMS broker, the database and each queue/topic variable, with `dependsOn` relations |
-| the whole project | **TechDocs** skeleton: overview, process list, API endpoints, resources and configuration variables |
+| `Processes/**/*.bwp` | per-process inventory (trigger, activity types, calls to other processes, fault handlers), a **call tree** from each entry point, and "called by" |
+| JMS activities in the processes | **messaging map**: each queue/topic Resource says which processes produce to it and which consume from it; a destination named only inside a process gets its own Resource |
+| REST bindings in `module.bwm` and the processes | which process implements each REST operation (on the API page) |
+| other palette activities (JDBC, HTTP, SOAP, files ...) | "systems the processes talk to": process, activity, connection resource and the URL/SQL attribute where one exists |
+| `Schemas/*.xsd` | schema page: top-level elements and types per file |
+| configuration and process structure | **findings** page: hardcoded private IPs, plain `http://` URLs, secret-like variables with plain values, placeholder `Sleep` activities, processes without fault handlers, unreferenced processes, no logging, no tests (secret values are never read into the page) |
+| `.ear` files and `Tests/` | release artefacts and test-file counts |
+| the whole project | **TechDocs** (overview, processes, messaging, API, resources, schemas, findings) |
 | form | owner, system, domain, lifecycle (a BW project cannot tell you these); optional System and Domain entities |
 
 Everything is written under one folder (default `devhub/`) in the repository. Files you maintain by hand,
@@ -70,14 +77,28 @@ repository. (`dir:.` is not used: TechDocs resolves it against `backstage.io/sou
 folder.) The Developer Hub host needs `mkdocs` with `mkdocs-techdocs-core` when `techdocs.generator.runIn` is
 `local`, or Docker when it is `docker`.
 
+### How the analysis works, and how to change it
+
+The flow reads each process once with `tibco:extract-parameters` (XPath over the `.bwp` XML) inside a step with
+`each:`. Backstage collects the outputs of an `each` step into one array entry per file, in file order, which is how
+results stay attached to the right process. The analysis itself is Nunjucks in `src/_analysis.njk`. `fetch:template`
+renders each file on its own and cannot include other files, so `tools/build-skeleton.mjs` inlines that analysis into
+every page and writes `entity-skeletons-bw-deep/`. Edit `src/`, then run `node tools/build-skeleton.mjs` (the built
+folder is what the flow uses and is committed).
+
 ### Limitations
 
+* The process analysis is verified against JMS and REST projects. For other palettes (JDBC, HTTP client, SOAP, file,
+  mail ...) the activity is listed with its connection resource and any `url`/`path`/`statement` attribute, but those
+  attribute names have not been checked against a real project that uses them.
+* Findings are heuristics, not a code review; some will be intentional.
+* The call tree follows *Call Process* activities only (not sub-process inline groups or dynamic calls).
 * The branch list is static: Backstage's form has no built-in field that lists a repository's real branches
   (that needs a custom scaffolder field extension in the Developer Hub build), hence the *Other branch* override.
 * The first application and first module found are imported. Use the *Application name* field to choose
   another one in a repository that holds several.
-* Relations are derived from shared-resource files and configuration variables; the flow does not parse the
-  `.bwp` process XML, so a database used only inside a process is not detected unless a `jdbc:` variable exists.
+* Database Resources are still derived from `jdbc:` configuration variables; a database used only through a process
+  activity is listed under "systems the processes talk to" but does not get its own Resource.
 * Bitbucket Server instances served under a context path (`https://host/bitbucket/...`) are not handled yet.
 * Generated descriptions are factual, not curated: edit the generated files to add team names, links and prose.
 
