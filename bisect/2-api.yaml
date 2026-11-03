@@ -1,0 +1,18 @@
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: orderprocessing-ordersapi
+  title: Orders API
+  description: API for managing customer orders.
+  tags:
+  - openapi
+  - businessworks
+  annotations:
+    backstage.io/source-location: url:https://git.vewins.co.uk/dave/OrderProcessingApplication/blob/main/OrderProcessing.module/Service%20Descriptors/OrdersAPI.json
+spec:
+  type: openapi
+  lifecycle: production
+  owner: group:default/finance-department
+  system: order-management-system
+  definition:
+    $text: https://git.vewins.co.uk/dave/OrderProcessingApplication/blob/main/OrderProcessing.module/Service%20Descriptors/OrdersAPI.json

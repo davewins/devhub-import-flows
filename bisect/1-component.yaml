@@ -1,0 +1,43 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: OrderProcessing
+  title: OrderProcessing
+  description: TIBCO BusinessWorks Container Edition application OrderProcessing 1.0.0
+    with 11 process(es) providing the Orders API.
+  tags:
+  - tibco
+  - businessworks
+  - bwce
+  - jms
+  - httpconnector
+  - jmsconnection
+  - rest
+  - messaging
+  links:
+  - title: Repository
+    url: https://git.vewins.co.uk/dave/OrderProcessingApplication
+  - title: TIBCO BusinessWorks documentation
+    url: https://docs.tibco.com/products/tibco-activematrix-businessworks
+  annotations:
+    backstage.io/source-location: url:https://git.vewins.co.uk/dave/OrderProcessingApplication/tree/main/
+    backstage.io/techdocs-ref: dir:.
+    github.com/project-slug: dave/OrderProcessingApplication
+    tibco.com/bw-version: 2.10.0 HF2 V49 2025-03-21
+    tibco.com/bw-edition: bwcf
+    tibco.com/bw-processes: '11'
+    tibco.com/bw-api-descriptors: '1'
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/finance-department
+  system: order-management-system
+  providesApis:
+  - api:default/orderprocessing-ordersapi
+  dependsOn:
+  - resource:default/orderprocessing-ems-broker
+  - resource:default/orderprocessing-queue-orders
+  - resource:default/orderprocessing-queue-logmessage
+  - resource:default/orderprocessing-queue-stockcheck
+  - resource:default/orderprocessing-api
+  - resource:default/orderprocessing-jmsconnectionresource
