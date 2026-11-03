@@ -51,7 +51,9 @@ template ships with github.com, gitlab.com, bitbucket.org and the author's own F
 
 1. Register the template: add `templates.yaml`, or the template file, to `catalog.locations` in your app-config,
    for example `- type: url` / `target: https://github.com/<owner>/<this-repo>/blob/main/templates.yaml`.
-2. Open **Import Flow** (`/import-flow`), choose the provider, repository, branch and project folder.
+2. Open **Import Flow** (`/import-flow`), choose the provider, repository, branch and project folder. The branch is a
+   drop-down of common names (`main`, `master`, `develop`, `development`, `trunk`); for any other branch, type its exact
+   name in *Other branch*, which overrides the list. Edit the `enum` under `branch` to suit your naming.
 3. Enter owner, system and lifecycle, then run it. The Component, APIs and Resources appear in the catalog.
 
 ### Cloud and Kubernetes deployments
@@ -62,6 +64,8 @@ the `integrations:` environment variables, and allow outbound HTTPS from the pod
 
 ### Limitations
 
+* The branch list is static: Backstage's form has no built-in field that lists a repository's real branches
+  (that needs a custom scaffolder field extension in the Developer Hub build), hence the *Other branch* override.
 * The first application and first module found are imported. Use the *Application name* field to choose
   another one in a repository that holds several.
 * Relations are derived from shared-resource files and configuration variables; the flow does not parse the

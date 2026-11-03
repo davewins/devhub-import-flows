@@ -2,6 +2,7 @@
   "scm": "github",
   "repoUrl": "github.com?owner=acme&repo=order-processing",
   "branch": "main",
+  "branchOther": "",
   "application_folder": ".",
   "application": "",
   "system": "order-management-system",
