@@ -1,0 +1,235 @@
+{#- Computes locations, names and lists; everything below is generated from the BW project. -#}
+{%- set r = values.repoUrl | parseRepoUrl -%}
+{%- set scm = values.scm -%}
+{%- set host = r.host -%}
+{#- namespace in the repository path: owner/group, Bitbucket Cloud workspace, or Bitbucket Server project key -#}
+{%- set ns = r.workspace if scm == "bitbucket-cloud" else (r.project if scm == "bitbucket-server" else r.owner) -%}
+{%- set webBase = ("https://" + host + "/projects/" + ns + "/repos/" + r.repo) if scm == "bitbucket-server" else ("https://" + host + "/" + ns + "/" + r.repo) -%}
+{#- file URL = blobPre + path + blobSuf ; folder URL = treePre + path + treeSuf -#}
+{%- set blobSuf = ("?at=refs/heads/" + values.branch) if scm == "bitbucket-server" else "" -%}
+{%- set treeSuf = blobSuf -%}
+{%- if scm == "github" -%}
+  {%- set blobPre = webBase + "/blob/" + values.branch + "/" -%}
+  {%- set treePre = webBase + "/tree/" + values.branch + "/" -%}
+{%- elif scm == "gitlab" -%}
+  {%- set blobPre = webBase + "/-/blob/" + values.branch + "/" -%}
+  {%- set treePre = webBase + "/-/tree/" + values.branch + "/" -%}
+{%- elif scm == "bitbucket-cloud" -%}
+  {%- set blobPre = webBase + "/src/" + values.branch + "/" -%}
+  {%- set treePre = blobPre -%}
+{%- elif scm == "bitbucket-server" -%}
+  {%- set blobPre = webBase + "/browse/" -%}
+  {%- set treePre = blobPre -%}
+{%- else -%}
+  {%- set blobPre = webBase + "/src/branch/" + values.branch + "/" -%}
+  {%- set treePre = blobPre -%}
+{%- endif -%}
+{%- set repoWeb = webBase -%}
+{%- set folder = "" if (values.application_folder == "." or values.application_folder == "") else values.application_folder + "/" -%}
+{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split("/") | last) -%}
+{%- set appId = app | replace(" ", "-") -%}
+{%- set lid = appId | lower -%}
+{%- set edition = values.bw_edition[1] if (values.bw_edition and values.bw_edition[1]) else "" -%}
+{%- set isCE = (edition == "bwcf" or edition == "bwce") -%}
+{%- set bwver = values.bw_version[1] if (values.bw_version and values.bw_version[1]) else "" -%}
+{%- set appver = (values.bw_app_version[1] | replace(".qualifier", "")) if (values.bw_app_version and values.bw_app_version[1]) else "" -%}
+{#- Configuration variables: the application's deployed profile wins over the module's defaults. -#}
+{%- set vars = [] -%}
+{%- set seen = [] -%}
+{%- for n in values.bw_gv_names -%}
+  {%- if not n.startsWith("//") and not n.startsWith("BW.") and n not in seen -%}{%- set _ = seen.push(n) -%}{%- set _ = vars.push({ "n": n, "v": values.bw_gv_values[loop.index0] }) -%}{%- endif -%}
+{%- endfor -%}
+{%- for n in values.bw_mod_gv_names -%}
+  {%- if not n.startsWith("//") and not n.startsWith("BW.") and n not in seen -%}{%- set _ = seen.push(n) -%}{%- set _ = vars.push({ "n": n, "v": values.bw_mod_gv_values[loop.index0] }) -%}{%- endif -%}
+{%- endfor -%}
+{%- set brokerUrl = "" -%}
+{%- set jdbcUrl = "" -%}
+{%- set queues = [] -%}
+{%- for x in vars -%}
+  {%- set n = x.n -%}{%- set v = x.v -%}
+  {%- if v is string and v != "" -%}
+    {%- if brokerUrl == "" and (v.startsWith("tcp://") or v.startsWith("ssl://")) -%}{%- set brokerUrl = v -%}{%- endif -%}
+    {%- if jdbcUrl == "" and v.startsWith("jdbc:") -%}{%- set jdbcUrl = v.split("?")[0] -%}{%- endif -%}
+    {%- if (n | lower).endsWith("queue") or (n | lower).endsWith("topic") -%}{%- set _ = queues.push({ "var": n, "name": v, "topic": (n | lower).endsWith("topic") }) -%}{%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- set brokerId = lid + "-ems-broker" -%}
+{%- set dbId = lid + "-database" -%}
+{%- set resRefs = [] -%}
+{%- set apiRefs = [] -%}
+{%- if brokerUrl != "" -%}{%- set _ = resRefs.push("resource:default/" + brokerId) -%}{%- endif -%}
+{%- if jdbcUrl != "" -%}{%- set _ = resRefs.push("resource:default/" + dbId) -%}{%- endif -%}
+{%- for q in queues -%}{%- set _ = resRefs.push("resource:default/" + lid + "-queue-" + (q.name | lower | replace(" ", "-"))) -%}{%- endfor -%}
+{%- for f in values.bw_resources -%}{%- set _ = resRefs.push("resource:default/" + lid + "-" + ((f.split("/") | last).split(".")[0] | lower)) -%}{%- endfor -%}
+{%- for f in values.bw_swagger_files -%}{%- set _ = apiRefs.push("api:default/" + lid + "-" + ((f.split("/") | last).split(".")[0] | lower)) -%}{%- endfor -%}
+{%- set tags = ["tibco", "businessworks", ("bwce" if isCE else "bw6")] -%}
+{%- for p in values.bw_palettes -%}
+  {%- set t = p.replace("name=bw.", "").replace("name=bw", "") | lower -%}
+  {%- if t != "" and t != "ext" and t != "generalactivities" and t not in tags -%}{%- set _ = tags.push(t) -%}{%- endif -%}
+{%- endfor -%}
+{%- if queues.length > 0 and "messaging" not in tags -%}{%- set _ = tags.push("messaging") -%}{%- endif -%}
+{%- set desc = values.bw_app_description[0] if (values.bw_app_description and values.bw_app_description[0]) else ("TIBCO BusinessWorks " + ("Container Edition " if isCE else "") + "application " + app + (" " + appver if appver != "" else "") + " with " + (values.bw_processes.length | string) + " process(es)" + (" providing the " + values.bw_api_title[0] if (values.bw_api_title and values.bw_api_title[0]) else "") + ".") -%}
+# Generated by the "Deep import flow for BusinessWorks projects" template.
+# Source: ${{ repoWeb }} (${{ scm }}, branch ${{ values.branch }}, folder ${{ values.application_folder }})
+# Everything here was derived from the BusinessWorks project. Edit freely; ownership,
+# descriptions and relations that cannot be read from a project are best added by hand.
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ appId | dump }}
+  title: ${{ app | dump }}
+  description: ${{ desc | dump }}
+  tags: ${{ tags | dump }}
+  links:
+    - title: Repository
+      url: ${{ repoWeb | dump }}
+    - title: TIBCO BusinessWorks documentation
+      url: https://docs.tibco.com/products/tibco-activematrix-businessworks
+  annotations:
+    backstage.io/source-location: ${{ ("url:" + treePre + (folder | replace(" ", "%20")) + treeSuf) | dump }}
+    backstage.io/techdocs-ref: dir:.
+{%- if scm == "github" %}
+    github.com/project-slug: ${{ (ns + "/" + r.repo) | dump }}
+{%- elif scm == "gitlab" %}
+    gitlab.com/project-slug: ${{ (ns + "/" + r.repo) | dump }}
+{%- endif %}
+{%- if bwver != "" %}
+    tibco.com/bw-version: ${{ bwver | dump }}
+{%- endif %}
+{%- if edition != "" %}
+    tibco.com/bw-edition: ${{ edition | dump }}
+{%- endif %}
+    tibco.com/bw-processes: ${{ (values.bw_processes.length | string) | dump }}
+{%- if values.bw_swagger_files.length > 0 %}
+    tibco.com/bw-api-descriptors: ${{ (values.bw_swagger_files.length | string) | dump }}
+{%- endif %}
+spec:
+  type: service
+  lifecycle: ${{ values.lifecycle | dump }}
+  owner: ${{ values.owner | dump }}
+  system: ${{ values.system | dump }}
+{%- if apiRefs.length > 0 %}
+  providesApis: ${{ apiRefs | dump }}
+{%- endif %}
+{%- if resRefs.length > 0 %}
+  dependsOn: ${{ resRefs | dump }}
+{%- endif %}
+{%- for f in values.bw_swagger_files %}
+{%- set apiBase = (f.split("/") | last).split(".")[0] %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: ${{ (lid + "-" + (apiBase | lower)) | dump }}
+  title: ${{ (values.bw_api_title[0] if (loop.first and values.bw_api_title and values.bw_api_title[0]) else apiBase) | dump }}
+  description: ${{ (values.bw_api_description[0] if (loop.first and values.bw_api_description and values.bw_api_description[0]) else ("OpenAPI definition " + f + " from the " + app + " BusinessWorks project")) | dump }}
+  tags: [openapi, businessworks]
+  annotations:
+    backstage.io/source-location: ${{ ("url:" + blobPre + ((folder + f) | replace(" ", "%20")) + blobSuf) | dump }}
+spec:
+  type: openapi
+  lifecycle: ${{ values.lifecycle | dump }}
+  owner: ${{ values.owner | dump }}
+  system: ${{ values.system | dump }}
+  definition:
+    $text: ${{ (blobPre + ((folder + f) | replace(" ", "%20")) + blobSuf) | dump }}
+{%- endfor %}
+{%- if brokerUrl != "" %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ brokerId | dump }}
+  title: TIBCO EMS broker
+  description: ${{ ("Message broker used by " + app + ", taken from the project's deployment configuration.") | dump }}
+  tags: [tibco-ems, messaging]
+  annotations:
+    tibco.com/ems-url: ${{ brokerUrl | dump }}
+spec:
+  type: message-broker
+  owner: ${{ values.owner | dump }}
+  system: ${{ values.system | dump }}
+{%- endif %}
+{%- if jdbcUrl != "" %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ dbId | dump }}
+  title: Database
+  description: ${{ ("Database used by " + app + ", taken from the project's deployment configuration.") | dump }}
+  tags: [database, jdbc]
+  annotations:
+    tibco.com/jdbc-url: ${{ jdbcUrl | dump }}
+spec:
+  type: database
+  owner: ${{ values.owner | dump }}
+  system: ${{ values.system | dump }}
+{%- endif %}
+{%- for q in queues %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ (lid + "-queue-" + (q.name | lower | replace(" ", "-"))) | dump }}
+  title: ${{ q.name | dump }}
+  description: ${{ (("EMS topic " if q.topic else "EMS queue ") + q.name + " (configuration variable " + q["var"] + ")") | dump }}
+  tags: [tibco-ems, ${{ "topic" if q.topic else "queue" }}]
+  annotations:
+    tibco.com/destination-name: ${{ q.name | dump }}
+    tibco.com/config-variable: ${{ q["var"] | dump }}
+spec:
+  type: ${{ "jms-topic" if q.topic else "jms-queue" }}
+  owner: ${{ values.owner | dump }}
+  system: ${{ values.system | dump }}
+{%- if brokerUrl != "" %}
+  dependsOn: ${{ ["resource:default/" + brokerId] | dump }}
+{%- endif %}
+{%- endfor %}
+{%- for f in values.bw_resources %}
+{%- set rbase = (f.split("/") | last).split(".")[0] %}
+{%- set rext = (f.split("/") | last).split(".") | last %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ (lid + "-" + (rbase | lower)) | dump }}
+  title: ${{ rbase | dump }}
+  description: ${{ ("BusinessWorks shared resource (" + rext + ") defined in " + f) | dump }}
+  tags: [businessworks, shared-resource]
+  annotations:
+    backstage.io/source-location: ${{ ("url:" + blobPre + ((folder + f) | replace(" ", "%20")) + blobSuf) | dump }}
+    tibco.com/bw-resource-type: ${{ rext | dump }}
+spec:
+  type: ${{ ("jms-connection" if rext == "jmsConnResource" else ("http-connector" if rext == "httpConnResource" else ("jdbc-connection" if rext == "jdbcResource" else "bw-shared-resource"))) | dump }}
+  owner: ${{ values.owner | dump }}
+  system: ${{ values.system | dump }}
+{%- if rext == "jmsConnResource" and brokerUrl != "" %}
+  dependsOn: ${{ ["resource:default/" + brokerId] | dump }}
+{%- endif %}
+{%- if rext == "jdbcResource" and jdbcUrl != "" %}
+  dependsOn: ${{ ["resource:default/" + dbId] | dump }}
+{%- endif %}
+{%- endfor %}
+{%- if values.createSystem %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: ${{ values.system | dump }}
+  description: ${{ ("System containing " + app) | dump }}
+spec:
+  owner: ${{ values.owner | dump }}
+{%- if values.domain %}
+  domain: ${{ values.domain | dump }}
+{%- endif %}
+{%- if values.domain %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: ${{ values.domain | dump }}
+spec:
+  owner: ${{ values.owner | dump }}
+{%- endif %}
+{%- endif %}

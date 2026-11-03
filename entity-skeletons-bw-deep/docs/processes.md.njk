@@ -1,0 +1,10 @@
+# Processes
+
+${{ values.bw_processes.length }} process(es) found in the project.
+
+| Process | Package | File |
+|---|---|---|
+{% for f in values.bw_processes -%}
+{%- set file = f.split("/") | last -%}
+| ${{ file.replace(".bwp", "") }} | ${{ (f.split("/").slice(-4, -1) | join(".")) if f.split("/").length > 3 else "" }} | `${{ f }}` |
+{% endfor %}

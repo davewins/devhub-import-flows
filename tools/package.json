@@ -1,0 +1,15 @@
+{
+  "name": "bw-deep-import-simulator",
+  "private": true,
+  "type": "module",
+  "description": "Offline simulation of the import-flow-bw-deep template against a local BusinessWorks project",
+  "dependencies": {
+    "@backstage/catalog-model": "*",
+    "fast-xml-parser": "*",
+    "glob": "*",
+    "jsonpath": "*",
+    "nunjucks": "*",
+    "regex-parser": "*",
+    "yaml": "*"
+  }
+}

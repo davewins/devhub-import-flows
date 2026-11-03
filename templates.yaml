@@ -1,8 +1,9 @@
 apiVersion: backstage.io/v1alpha1
 kind: Location
 metadata:
-  name: devhub-forgejo-templates
-  description: DevHub templates adapted for Forgejo (git.vewins.co.uk)
+  name: devhub-bw-import-templates
+  description: BusinessWorks import flows for TIBCO Developer Hub (GitHub, GitLab, Bitbucket, Gitea/Forgejo)
 spec:
   targets:
+    - ./import-flow-bw-deep.yaml
     - ./import-flow-bw6-forgejo.yaml

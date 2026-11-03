@@ -1,0 +1,13 @@
+{
+  "scm": "github",
+  "repoUrl": "github.com?owner=acme&repo=order-processing",
+  "branch": "main",
+  "application_folder": ".",
+  "application": "",
+  "system": "order-management-system",
+  "domain": "sales-operations",
+  "owner": "group:default/order-processing-team",
+  "lifecycle": "production",
+  "createSystem": false,
+  "outputFolder": "devhub"
+}

@@ -1,0 +1,308 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: import-flow-bw-deep
+  title: Deep import flow for BusinessWorks (BW6 / BWCE) projects
+  description: >-
+    Reads an existing BusinessWorks project from git and generates the catalog
+    entities (Component, APIs, Resources, optional System/Domain) and a TechDocs
+    skeleton from what is in the project, then commits them and registers them.
+  tags:
+    - import-flow
+    - tibco
+    - business-works-6
+    - business-works-container-edition
+    - developer-hub
+    - bwce
+spec:
+  owner: group:default/tibco-imported
+  type: integration
+
+  parameters:
+    - title: Repository Location
+      required:
+        - scm
+        - repoUrl
+      properties:
+        scm:
+          title: Git provider
+          type: string
+          default: github
+          description: >-
+            Which kind of git server hosts the repository. Needed because self-hosted
+            servers cannot be told apart by their host name.
+          enum:
+            - github
+            - gitlab
+            - bitbucket-cloud
+            - bitbucket-server
+            - gitea
+          enumNames:
+            - GitHub (github.com or Enterprise Server)
+            - GitLab (gitlab.com or self-hosted)
+            - Bitbucket Cloud (bitbucket.org)
+            - Bitbucket Server / Data Center
+            - Gitea / Forgejo
+        repoUrl:
+          title: Git repository with an existing BusinessWorks project
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            # Add your own git hosts here (self-hosted GitLab, Bitbucket Server, GitHub
+            # Enterprise, Gitea/Forgejo ...). Each host also needs an entry under
+            # `integrations:` in the DevHub app-config, which is also what supplies the
+            # credentials used to clone and push.
+            allowedHosts:
+              - github.com
+              - gitlab.com
+              - bitbucket.org
+              - git.vewins.co.uk
+        branch:
+          title: Branch
+          type: string
+          default: main
+          description: Branch to read from and to commit the generated files to.
+        application_folder:
+          title: Project folder
+          type: string
+          default: '.'
+          description: >-
+            Folder in the repository that holds the BusinessWorks application and
+            module projects. Use . if they sit at the repository root.
+        application:
+          title: Application name (optional)
+          type: string
+          description: >-
+            Only needed when the folder holds several BW applications. Leave empty
+            to import the first one found.
+
+    - title: Catalog details
+      required:
+        - owner
+        - system
+      properties:
+        system:
+          title: System
+          type: string
+          description: Name of the System this application belongs to, e.g. order-management-system.
+        domain:
+          title: Domain (optional)
+          type: string
+          description: Domain of the System, e.g. sales-operations.
+        owner:
+          title: Owner
+          type: string
+          description: Owner of the generated entities
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds:
+              - Group
+        lifecycle:
+          title: Lifecycle
+          type: string
+          default: production
+          enum:
+            - experimental
+            - production
+            - deprecated
+        createSystem:
+          title: Also create the System and Domain entities
+          type: boolean
+          default: false
+          description: Tick if the System/Domain do not exist in the catalog yet.
+        outputFolder:
+          title: Folder for the generated files
+          type: string
+          default: devhub
+          description: >-
+            Created in the repository (relative to its root). Existing files in the
+            project, including any catalog-info.yaml you wrote by hand, are not touched.
+
+  # The deep import flow:
+  # 1. Clone the repository
+  # 2. Discover the project files (application, module, processes, shared resources, API descriptors)
+  # 3. Extract names, versions, palettes, configuration variables (application profile over module defaults) and API metadata
+  # 4. Generate catalog-info.yaml and a TechDocs skeleton from the skeletons
+  # 5. Commit them to the branch and register them in the catalog
+  steps:
+    - id: clone
+      name: Clone the Project
+      action: tibco:git:clone
+      input:
+        failOnError: true
+        branch: ${{ parameters.branch }}
+        repoUrl: ${{ "https://" + (parameters.repoUrl | parseRepoUrl).host + ("/scm/" if parameters.scm == "bitbucket-server" else "/") + ((parameters.repoUrl | parseRepoUrl).workspace if parameters.scm == "bitbucket-cloud" else ((parameters.repoUrl | parseRepoUrl).project if parameters.scm == "bitbucket-server" else (parameters.repoUrl | parseRepoUrl).owner)) + "/" + (parameters.repoUrl | parseRepoUrl).repo + (".git" if parameters.scm == "bitbucket-server" else "") }}
+
+    - id: discover
+      name: Discover Project Files
+      action: tibco:extract-parameters
+      input:
+        failOnError: false
+        sourcePath: ${{ parameters.application_folder }}
+        extractParameters:
+          bw_app_files:
+            type: workspace
+            glob: ${{ ("**/" + parameters.application + "/META-INF/TIBCO.xml") if parameters.application else "**/META-INF/TIBCO.xml" }}
+            regex:
+              regexPattern: 'TIBCO\.xml$'
+          bw_module_files:
+            type: workspace
+            glob: '**/META-INF/module.bwm'
+            regex:
+              regexPattern: 'module\.bwm$'
+          bw_processes:
+            type: workspace
+            glob: '**/*.bwp'
+            regex:
+              regexPattern: '\.bwp$'
+          bw_resources:
+            type: workspace
+            glob: '**/Resources/**/*'
+            regex:
+              regexPattern: '\.[A-Za-z]+Resource$'
+          bw_swagger_files:
+            type: workspace
+            glob: '**/Service Descriptors/*.json'
+            regex:
+              regexPattern: '\.json$'
+          bw_schemas:
+            type: workspace
+            glob: '**/Schemas/*.xsd'
+            regex:
+              regexPattern: '\.xsd$'
+
+    - id: extract
+      name: Extract Project Details
+      action: tibco:extract-parameters
+      input:
+        failOnError: false
+        sourcePath: ${{ parameters.application_folder }}
+        extractParameters:
+          bw_app_name:
+            type: xml
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/.project" }}
+            jsonPath: '$.projectDescription.name'
+          bw_app_description:
+            type: xml
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/.project" }}
+            jsonPath: '$.projectDescription.comment'
+          bw_app_version:
+            type: file
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/MANIFEST.MF" }}
+            regex:
+              regexPattern: 'Bundle-Version: *(\S+)'
+          bw_version:
+            type: file
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/MANIFEST.MF" }}
+            regex:
+              regexPattern: 'TIBCO-BW-Version: *([^\r\n]+)'
+          bw_edition:
+            type: file
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/MANIFEST.MF" }}
+            regex:
+              regexPattern: 'TIBCO-BW-Edition: *(\w+)'
+          bw_palettes:
+            type: file
+            filePath: ${{ (steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "")) + "/META-INF/MANIFEST.MF" }}
+            regex:
+              regexPattern: 'name=(bw[A-Za-z0-9_.]*)'
+              regexFlags: g
+          bw_gv_names:
+            type: xml
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/default.substvar" }}
+            jsonPath: '$.repository.globalVariables.globalVariable[*].name'
+          bw_gv_values:
+            type: xml
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/default.substvar" }}
+            jsonPath: '$.repository.globalVariables.globalVariable[*].value'
+          bw_mod_gv_names:
+            type: xml
+            filePath: ${{ (steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "")) + "/META-INF/default.substvar" }}
+            jsonPath: '$.repository.globalVariables.globalVariable[*].name'
+          bw_mod_gv_values:
+            type: xml
+            filePath: ${{ (steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "")) + "/META-INF/default.substvar" }}
+            jsonPath: '$.repository.globalVariables.globalVariable[*].value'
+          bw_api_title:
+            type: json
+            filePath: ${{ steps.discover.output.bw_swagger_files[0] }}
+            jsonPath: '$.info.title'
+          bw_api_description:
+            type: json
+            filePath: ${{ steps.discover.output.bw_swagger_files[0] }}
+            jsonPath: '$.info.description'
+          bw_api_version:
+            type: json
+            filePath: ${{ steps.discover.output.bw_swagger_files[0] }}
+            jsonPath: '$.info.version'
+          bw_api_base_path:
+            type: json
+            filePath: ${{ steps.discover.output.bw_swagger_files[0] }}
+            jsonPath: '$.basePath'
+          bw_api_paths:
+            type: json
+            filePath: ${{ steps.discover.output.bw_swagger_files[0] }}
+            jsonPath: '$.paths'
+
+    - id: generate
+      name: Generate Catalog Entities and Docs
+      action: fetch:template
+      input:
+        url: ./entity-skeletons-bw-deep/
+        targetPath: ${{ parameters.outputFolder }}
+        templateFileExtension: true
+        values:
+          scm: ${{ parameters.scm }}
+          repoUrl: ${{ parameters.repoUrl }}
+          branch: ${{ parameters.branch }}
+          application_folder: ${{ parameters.application_folder }}
+          owner: ${{ parameters.owner }}
+          system: ${{ parameters.system }}
+          domain: ${{ parameters.domain }}
+          lifecycle: ${{ parameters.lifecycle }}
+          createSystem: ${{ parameters.createSystem }}
+          outputFolder: ${{ parameters.outputFolder }}
+          app_dir: ${{ steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "") }}
+          module_dir: ${{ steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "") }}
+          bw_processes: ${{ steps.discover.output.bw_processes }}
+          bw_resources: ${{ steps.discover.output.bw_resources }}
+          bw_swagger_files: ${{ steps.discover.output.bw_swagger_files }}
+          bw_schemas: ${{ steps.discover.output.bw_schemas }}
+          bw_app_name: ${{ steps.extract.output.bw_app_name }}
+          bw_app_description: ${{ steps.extract.output.bw_app_description }}
+          bw_app_version: ${{ steps.extract.output.bw_app_version }}
+          bw_version: ${{ steps.extract.output.bw_version }}
+          bw_edition: ${{ steps.extract.output.bw_edition }}
+          bw_palettes: ${{ steps.extract.output.bw_palettes }}
+          bw_gv_names: ${{ steps.extract.output.bw_gv_names }}
+          bw_gv_values: ${{ steps.extract.output.bw_gv_values }}
+          bw_mod_gv_names: ${{ steps.extract.output.bw_mod_gv_names }}
+          bw_mod_gv_values: ${{ steps.extract.output.bw_mod_gv_values }}
+          bw_api_title: ${{ steps.extract.output.bw_api_title }}
+          bw_api_description: ${{ steps.extract.output.bw_api_description }}
+          bw_api_version: ${{ steps.extract.output.bw_api_version }}
+          bw_api_base_path: ${{ steps.extract.output.bw_api_base_path }}
+          bw_api_paths: ${{ steps.extract.output.bw_api_paths }}
+
+    - id: push
+      name: Commit the Generated Files
+      action: tibco:git:push
+      input:
+        failOnError: true
+        branch: ${{ parameters.branch }}
+        commitMessage: Add catalog entities generated by the BusinessWorks deep import flow
+
+    - id: register
+      name: Register in the Catalog
+      action: catalog:register
+      input:
+        catalogInfoUrl: ${{ (("https://" + (parameters.repoUrl | parseRepoUrl).host + "/projects/" + ((parameters.repoUrl | parseRepoUrl).workspace if parameters.scm == "bitbucket-cloud" else ((parameters.repoUrl | parseRepoUrl).project if parameters.scm == "bitbucket-server" else (parameters.repoUrl | parseRepoUrl).owner)) + "/repos/" + (parameters.repoUrl | parseRepoUrl).repo + "/browse/" + parameters.outputFolder + "/catalog-info.yaml" + "?at=refs/heads/" + parameters.branch) if parameters.scm == "bitbucket-server" else ("https://" + (parameters.repoUrl | parseRepoUrl).host + "/" + ((parameters.repoUrl | parseRepoUrl).workspace if parameters.scm == "bitbucket-cloud" else ((parameters.repoUrl | parseRepoUrl).project if parameters.scm == "bitbucket-server" else (parameters.repoUrl | parseRepoUrl).owner)) + "/" + (parameters.repoUrl | parseRepoUrl).repo + ("/blob/" if parameters.scm == "github" else ("/-/blob/" if parameters.scm == "gitlab" else ("/src/" if parameters.scm == "bitbucket-cloud" else "/src/branch/"))) + parameters.branch + "/" + parameters.outputFolder + "/catalog-info.yaml")) }}
+
+  output:
+    links:
+      - title: Open in catalog (Component)
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}
+      - title: Business Works Documentation
+        icon: catalog
+        url: https://docs.tibco.com/products/tibco-activematrix-businessworks

@@ -1,0 +1,31 @@
+# API
+
+{% if values.bw_swagger_files.length == 0 -%}
+No OpenAPI/Swagger descriptor was found under `Service Descriptors/` in this project.
+{%- else -%}
+${{ values.bw_api_title[0] if (values.bw_api_title and values.bw_api_title[0]) else "API" }}
+${{ ("(version " + values.bw_api_version[0] + ")") if (values.bw_api_version and values.bw_api_version[0]) else "" }}
+
+${{ values.bw_api_description[0] if (values.bw_api_description and values.bw_api_description[0]) else "" }}
+
+{% if values.bw_api_base_path and values.bw_api_base_path[0] -%}
+Base path: `${{ values.bw_api_base_path[0] }}`
+{%- endif %}
+
+## Endpoints
+
+| Method | Path | Summary |
+|---|---|---|
+{% for p, ops in values.bw_api_paths[0] -%}
+{%- for m, op in ops -%}
+{%- if m in ["get", "post", "put", "delete", "patch", "head", "options"] -%}
+| ${{ m | upper }} | `${{ p }}` | ${{ (op.summary if op.summary else "") | replace("|", "/") }} |
+{% endif -%}
+{%- endfor -%}
+{%- endfor %}
+
+Descriptor files:
+{% for f in values.bw_swagger_files %}
+- `${{ f }}`
+{%- endfor %}
+{%- endif %}

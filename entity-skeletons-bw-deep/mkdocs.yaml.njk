@@ -1,0 +1,10 @@
+{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split("/") | last) -%}
+site_name: ${{ (app + " (BusinessWorks)") | dump }}
+site_description: ${{ ("Documentation generated from the " + app + " BusinessWorks project") | dump }}
+nav:
+  - Overview: index.md
+  - Processes: processes.md
+  - API: api.md
+  - Resources and configuration: resources.md
+plugins:
+  - techdocs-core

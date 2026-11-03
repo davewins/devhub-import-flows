@@ -1,0 +1,32 @@
+{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split("/") | last) -%}
+{%- set edition = values.bw_edition[1] if (values.bw_edition and values.bw_edition[1]) else "" -%}
+# ${{ app }}
+
+> Generated from the BusinessWorks project by the DevHub import flow. Regenerate by re-running
+> the import, or edit these pages by hand.
+
+${{ values.bw_app_description[0] if (values.bw_app_description and values.bw_app_description[0]) else "TIBCO BusinessWorks application." }}
+
+| | |
+|---|---|
+| Application | ${{ app }} |
+| Application version | ${{ values.bw_app_version[1] if (values.bw_app_version and values.bw_app_version[1]) else "n/a" }} |
+| BusinessWorks version | ${{ values.bw_version[1] if (values.bw_version and values.bw_version[1]) else "n/a" }} |
+| Edition | ${{ ("Container Edition (BWCE)" if (edition == "bwcf" or edition == "bwce") else (edition if edition != "" else "n/a")) }} |
+| Processes | ${{ values.bw_processes.length }} |
+| API descriptors | ${{ values.bw_swagger_files.length }} |
+| Shared resources | ${{ values.bw_resources.length }} |
+| Schemas | ${{ values.bw_schemas.length }} |
+| Owner | ${{ values.owner }} |
+| System | ${{ values.system }} |
+| Lifecycle | ${{ values.lifecycle }} |
+
+## Palettes used
+
+{% for p in values.bw_palettes -%}
+{% if p != "name=bwext" -%}
+- `${{ p.replace("name=", "") }}`
+{% endif -%}
+{% else -%}
+No palette information found in the module manifest.
+{% endfor %}
