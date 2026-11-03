@@ -1,0 +1,29 @@
+BusinessWorks import flows for TIBCO Developer Hub
+Copyright 2026 David Winstone
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party attribution
+-----------------------
+import-flow-bw6-forgejo.yaml and the files in entity-skeletons-bw6/ are adapted
+from the BW6 import flow published in the TIBCO Developer Hub repository:
+
+  https://github.com/TIBCOSoftware/tibco-developer-hub
+  (tibco-examples/advanced-import-flows/import-flow-bw6.yaml)
+  Copyright TIBCO Software Inc. / Cloud Software Group, Inc.
+  Licensed under the Apache License, Version 2.0.
+
+Changes: the allowed git host list, the repository URL forms and the skeleton
+annotations were changed so the flow works with Gitea / Forgejo servers.
+
+import-flow-bw-deep.yaml, entity-skeletons-bw-deep/ and tools/ are original work
+that use the scaffolder actions shipped with TIBCO Developer Hub
+(tibco:git:clone, tibco:extract-parameters, tibco:git:push) and Backstage
+(fetch:template, catalog:register). They contain no code from those projects.
+
+Trademarks
+----------
+TIBCO, BusinessWorks, BWCE and TIBCO Developer Hub are trademarks of Cloud
+Software Group, Inc. Backstage is a trademark of The Linux Foundation. This is an
+independent, community project: it is not made, endorsed or supported by TIBCO,
+Cloud Software Group or the Backstage project.

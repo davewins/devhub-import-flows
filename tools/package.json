@@ -1,6 +1,7 @@
 {
   "name": "bw-deep-import-simulator",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Offline simulation of the import-flow-bw-deep template against a local BusinessWorks project",
   "dependencies": {

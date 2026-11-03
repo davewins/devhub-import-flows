@@ -44,11 +44,13 @@ integrations:
 ```
 
 Add every host you want in the picker to `allowedHosts` in the template (top of `parameters`). The
-template ships with github.com, gitlab.com, bitbucket.org and an example Forgejo host.
+template ships with github.com, gitlab.com, bitbucket.org and the author's own Forgejo host
+(`git.vewins.co.uk`), which you should replace with yours.
 
 ### Using it
 
-1. Register the template (add `templates.yaml`, or the template file, to `catalog.locations`).
+1. Register the template: add `templates.yaml`, or the template file, to `catalog.locations` in your app-config,
+   for example `- type: url` / `target: https://github.com/<owner>/<this-repo>/blob/main/templates.yaml`.
 2. Open **Import Flow** (`/import-flow`), choose the provider, repository, branch and project folder.
 3. Enter owner, system and lifecycle, then run it. The Component, APIs and Resources appear in the catalog.
 
@@ -80,5 +82,23 @@ node simulate.mjs /path/to/bw-project params.example.json
 
 ## Thin flow (`import-flow-bw6-forgejo.yaml`)
 
-An adaptation of TIBCO's own BW6 import flow for Forgejo/Gitea hosts (host list, URL forms and the skeleton
-annotation changed). It only creates a name, description and dependencies; use the deep flow above for more.
+An adaptation of [TIBCO's own BW6 import flow](https://github.com/TIBCOSoftware/tibco-developer-hub/blob/main/tibco-examples/advanced-import-flows/import-flow-bw6.yaml)
+for Forgejo/Gitea hosts (host list, URL forms and the skeleton annotation changed; see `NOTICE`). It only creates a name, description and dependencies; use the deep flow above for more.
+
+## Re-running the flow
+
+The flow overwrites its generated files on every run, so re-running refreshes them. Registration is strict: if
+the location is already registered the final step fails with `409 Conflict`. Unregister first (open an entity,
+**⋮ > Unregister entity > Unregister Location**; do not use *Delete Entity*, which leaves the location behind).
+
+## Status
+
+Tested offline against a BW6 project for all five providers with `tools/simulate.mjs`, and end to end against
+Gitea/Forgejo in a local Developer Hub. GitHub, GitLab and Bitbucket are covered by the simulator only; reports
+and pull requests are welcome.
+
+## Licence and attribution
+
+Apache License 2.0, see `LICENSE`. `import-flow-bw6-forgejo.yaml` is adapted from TIBCO's Apache-2.0 example,
+see `NOTICE`. This is an independent community project, not made, endorsed or supported by TIBCO / Cloud
+Software Group. TIBCO, BusinessWorks and BWCE are trademarks of Cloud Software Group, Inc.

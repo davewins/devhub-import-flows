@@ -1,3 +1,5 @@
+# Adapted from TIBCO's import-flow-bw6.yaml (Apache-2.0), see NOTICE.
+# Replace git.vewins.co.uk in allowedHosts with your own Gitea/Forgejo host.
 apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
