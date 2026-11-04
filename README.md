@@ -1,5 +1,51 @@
 # BusinessWorks import flows for TIBCO Developer Hub
 
+## Prerequisites: git provider access in `app-config`
+
+The flow reads files from your repository (project files, Swagger, docs sources), so DevHub needs an
+`integrations` entry for **every git host you use**. Without one, reads fail (401/404 on private repos) or hit
+anonymous rate limits (GitHub allows 60 requests/hour per IP, which a single import can exceed).
+Put these in `app-config.portable.yaml` (or your deployment's app-config); `${VAR}` values come from
+environment variables of the process running DevHub.
+
+```yaml
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}            # fine-grained PAT: Contents + Metadata read on the repos
+    # GitHub Enterprise Server: host, apiBaseUrl (https://HOST/api/v3), rawBaseUrl (https://HOST/raw)
+    # Org-wide: use a GitHub App (apps: appId, clientId, clientSecret, privateKey, webhookSecret)
+  gitlab:
+    - host: gitlab.com
+      token: ${GITLAB_TOKEN}            # read_api + read_repository
+    - host: gitlab.example.com          # self-hosted
+      token: ${GITLAB_SELFHOSTED_TOKEN}
+      apiBaseUrl: https://gitlab.example.com/api/v4
+      baseUrl: https://gitlab.example.com
+  bitbucketCloud:                       # host is always bitbucket.org
+    - username: ${BITBUCKET_USERNAME}
+      appPassword: ${BITBUCKET_APP_PASSWORD}
+    # Atlassian is replacing app passwords with API tokens; newer Backstage versions accept a
+    # token with the Atlassian email as username. Check the docs for your version.
+  bitbucketServer:                      # Server / Data Center
+    - host: bitbucket.example.com
+      apiBaseUrl: https://bitbucket.example.com/rest/api/1.0
+      token: ${BITBUCKET_SERVER_TOKEN}
+  gitea:                                # Gitea and Forgejo both use this provider
+    - host: git.example.com
+      username: ${GITEA_USERNAME}
+      password: ${GITEA_TOKEN}          # an access token works as the password
+```
+
+Also:
+
+- Add each host you want to import from to `allowedHosts` in the flow's `RepoUrlPicker` (the default list
+  contains an example host to replace).
+- `backend.reading.allow` is not needed for hosts that have an `integrations` entry.
+- Check the exact options for your Backstage version in the
+  [integrations documentation](https://backstage.io/docs/integrations/).
+- For TechDocs generated locally, `mkdocs` and `mkdocs-techdocs-core` must be installed on the host running DevHub.
+
 ## Deep import flow (`import-flow-bw-deep.yaml`)
 
 Point it at a git repository that contains a TIBCO BusinessWorks (BW6 / BWCE) project and it builds the
