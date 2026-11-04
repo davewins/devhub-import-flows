@@ -132,7 +132,32 @@
   {%- set lifecycle = ("onStartup" in (values.bw_p_rest_ops[i] | join(" "))) if (values.bw_p_rest_ops and values.bw_p_rest_ops[i]) else false -%}
   {%- set timers = [] -%}
   {%- for ty in types -%}{%- if ("timer" in (ty | lower)) -%}{%- set _ = timers.push(ty) -%}{%- endif -%}{%- endfor -%}
-  {%- set _ = procs.push({ "name": pname, "full": pfull[i], "file": f, "types": types, "tnames": tnames, "calls": calls, "ext": ext, "ops": ops, "jmsIn": jmsIn, "jmsOut": jmsOut, "catches": ncatch, "lifecycle": lifecycle, "timers": timers, "calledBy": [] }) -%}
+  {%- set edges = [] -%}{%- set nodes = [] -%}
+  {%- set srcs = ((values.bw_p_srcs[i] if values.bw_p_srcs else []) or []) -%}
+  {%- set srcn = ((values.bw_p_srcn[i] if values.bw_p_srcn else []) or []) -%}
+  {%- set tgts = ((values.bw_p_tgts[i] if values.bw_p_tgts else []) or []) -%}
+  {%- set tgtn = ((values.bw_p_tgtn[i] if values.bw_p_tgtn else []) or []) -%}
+  {#- each <sources>/<targets> element belongs to exactly one activity (srcn/tgtn, same order); a link joins the activity whose
+      <source linkName> equals another activity's <target linkName> -#}
+  {%- for sx in srcs -%}
+    {%- set si = loop.index0 -%}
+    {%- for sm in (sx.match(r/linkName="[^"]*"/g) or []) -%}
+      {%- set lname = sm.split('"')[1] -%}
+      {%- for tx in tgts -%}
+        {%- set ti = loop.index0 -%}
+        {%- for tm in (tx.match(r/linkName="[^"]*"/g) or []) -%}
+          {%- if tm.split('"')[1] == lname and srcn[si] and tgtn[ti] -%}
+            {%- set fa = srcn[si].split('"')[1] -%}{%- set ta = tgtn[ti].split('"')[1] -%}
+            {%- set _ = edges.push({ "from": fa, "to": ta }) -%}
+            {%- if fa not in nodes -%}{%- set _ = nodes.push(fa) -%}{%- endif -%}
+            {%- if ta not in nodes -%}{%- set _ = nodes.push(ta) -%}{%- endif -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+    {%- endfor -%}
+  {%- endfor -%}
+  {%- for tn in tnames -%}{%- if tn != "" and tn not in nodes -%}{%- set _ = nodes.push(tn) -%}{%- endif -%}{%- endfor -%}
+  {%- set _ = procs.push({ "edges": edges, "nodes": nodes, "name": pname, "full": pfull[i], "file": f, "types": types, "tnames": tnames, "calls": calls, "ext": ext, "ops": ops, "jmsIn": jmsIn, "jmsOut": jmsOut, "catches": ncatch, "lifecycle": lifecycle, "timers": timers, "calledBy": [] }) -%}
 {%- endfor -%}
 {%- for p in procs -%}
   {%- for c in p.calls -%}{%- set ci = pshort.indexOf(c) -%}{%- if ci >= 0 and p.name not in procs[ci].calledBy -%}{%- set _ = procs[ci].calledBy.push(p.name) -%}{%- endif -%}{%- endfor -%}

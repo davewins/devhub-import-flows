@@ -141,6 +141,14 @@ spec:
             applications link to the same entities and the topology shows who uses each queue.
             A catalog entity can only be defined once - pick "define" for the first application
             and "reference" for the rest.
+        processDiagrams:
+          title: Draw process flow diagrams in the documentation
+          type: boolean
+          default: false
+          description: >-
+            Adds a Graphviz diagram of each process to the TechDocs. The documentation build
+            needs the Graphviz "dot" program on the TechDocs host (it is not in the standard
+            DevHub image). Leave off if unsure - the flow table is always generated.
         outputFolder:
           title: Folder for the generated files
           type: string
@@ -347,6 +355,22 @@ spec:
             type: xml
             filePath: ${{ each.value }}
             xPath: "//*[local-name()='onMessage']/@partnerLink"
+          p_link_srcs:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='sources']"
+          p_link_src_owner:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='sources']/parent::*/@name"
+          p_link_tgts:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='targets']"
+          p_link_tgt_owner:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='targets']/parent::*/@name"
           p_catch:
             type: xml
             filePath: ${{ each.value }}
@@ -391,6 +415,7 @@ spec:
           createSystem: ${{ parameters.createSystem }}
           outputFolder: ${{ parameters.outputFolder }}
           infraMode: ${{ parameters.infraMode }}
+          processDiagrams: ${{ parameters.processDiagrams }}
           app_dir: ${{ steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "") }}
           module_dir: ${{ steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "") }}
           bw_processes: ${{ steps.discover.output.bw_processes }}
@@ -424,6 +449,10 @@ spec:
           bw_p_rest_ops: ${{ steps.processes.output.p_rest_ops }}
           bw_p_rest_links: ${{ steps.processes.output.p_rest_links }}
           bw_p_catch: ${{ steps.processes.output.p_catch }}
+          bw_p_srcs: ${{ steps.processes.output.p_link_srcs }}
+          bw_p_srcn: ${{ steps.processes.output.p_link_src_owner }}
+          bw_p_tgts: ${{ steps.processes.output.p_link_tgts }}
+          bw_p_tgtn: ${{ steps.processes.output.p_link_tgt_owner }}
           bw_s_elems: ${{ steps.schemas.output.s_elems }}
           bw_s_types: ${{ steps.schemas.output.s_types }}
           bw_tests: ${{ steps.discover.output.bw_tests }}

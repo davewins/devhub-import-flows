@@ -40,10 +40,46 @@ No processes found.
 ${{ '    ' }}- `${{ t }}` x ${{ cnt }}
 {% endfor -%}
 {% endif -%}
+{% if p.edges.length > 0 -%}
+- Flow: see below.
+{% endif -%}
 {% if p.ext.length > 0 -%}
 - Activities that talk to other systems:
 {% for e in p.ext -%}
 ${{ '    ' }}- **${{ e.name if e.name != "" else e.type }}** (`${{ e.type }}`)${{ (": " + e.detail) if e.detail != "" else "" }}${{ (", connection `" + e.conn + "`") if e.conn != "" else "" }}
 {% endfor -%}
+{% endif %}
+{% if p.edges.length > 0 %}
+#### Flow of ${{ p.name }}
+
+{% if values.processDiagrams -%}
+```graphviz dot ${{ (p.name | lower | replace(r/[^a-z0-9]+/g, "-")) }}-flow.svg
+digraph "${{ p.name }}" {
+  rankdir=LR; bgcolor="transparent";
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10, fillcolor="#e8f4f8", color="#6b7c93"];
+  edge [color="#6b7c93", arrowsize=0.7];
+{% for n in p.nodes -%}
+{%- set ti = p.tnames.indexOf(n) -%}{%- set ty = ((p.types[ti] | lower) if ti >= 0 else "") -%}
+{%- set fill = "#e8f4f8" -%}
+{%- if ty.endsWith(".receive") or ty.endsWith("receivemessage") or ty.endsWith("listener") or ty.endsWith("timer") or ty.endsWith("onstartup") or ty.endsWith("onevent") or n == "Start" -%}{%- set fill = "#c8e6c9" -%}
+{%- elif ty.endsWith(".reply") or ty.endsWith(".end") or n == "End" -%}{%- set fill = "#ffe0b2" -%}
+{%- elif ty.endsWith("catch") or ty.endsWith("throw") or ty.endsWith("rethrow") or ty.endsWith("error") -%}{%- set fill = "#ffcdd2" -%}
+{%- elif ty.endsWith("callprocess") -%}{%- set fill = "#bbdefb" -%}
+{%- elif ty.endsWith(".log") -%}{%- set fill = "#eceff1" -%}
+{%- endif %}
+  "${{ n }}" [label="${{ n }}${{ ("\\n" + (ty | replace("bw.", ""))) if ty != "" else "" }}", fillcolor="${{ fill }}"];
+{% endfor -%}
+{% for e in p.edges -%}
+  "${{ e.from }}" -> "${{ e.to }}";
+{% endfor -%}
+}
+```
+
+{% endif -%}
+| From | To |
+|---|---|
+{% for e in p.edges -%}
+| ${{ e.from }} | ${{ e.to }} |
+{% endfor %}
 {% endif %}
 {% endfor %}
