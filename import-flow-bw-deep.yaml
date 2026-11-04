@@ -144,11 +144,10 @@ spec:
         processDiagrams:
           title: Draw process flow diagrams in the documentation
           type: boolean
-          default: false
+          default: true
           description: >-
-            Adds a Graphviz diagram of each process to the TechDocs. The documentation build
-            needs the Graphviz "dot" program on the TechDocs host (it is not in the standard
-            DevHub image). Leave off if unsure - the flow table is always generated.
+            Adds an SVG diagram of each process to the TechDocs. The SVG is drawn by the template
+            itself, so nothing needs installing on the TechDocs host. The flow table is always generated.
         outputFolder:
           title: Folder for the generated files
           type: string

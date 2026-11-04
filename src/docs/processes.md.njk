@@ -53,12 +53,27 @@ ${{ '    ' }}- **${{ e.name if e.name != "" else e.type }}** (`${{ e.type }}`)${
 #### Flow of ${{ p.name }}
 
 {% if values.processDiagrams -%}
-```graphviz dot ${{ (p.name | lower | replace(r/[^a-z0-9]+/g, "-")) }}-flow.svg
-digraph "${{ p.name }}" {
-  rankdir=LR; bgcolor="transparent";
-  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10, fillcolor="#e8f4f8", color="#6b7c93"];
-  edge [color="#6b7c93", arrowsize=0.7];
-{% for n in p.nodes -%}
+{%- set nn = p.nodes.length -%}
+{%- set lvl = [] -%}{%- for n in p.nodes -%}{%- set _ = lvl.push(0) -%}{%- endfor -%}
+{%- for pass in range(nn) -%}{%- for e in p.edges -%}
+{%- set fi = p.nodes.indexOf(e.from) -%}{%- set ti = p.nodes.indexOf(e.to) -%}
+{%- if lvl[ti] < lvl[fi] + 1 and lvl[fi] < nn -%}{%- set _ = lvl.splice(ti, 1, lvl[fi] + 1) -%}{%- endif -%}
+{%- endfor -%}{%- endfor -%}
+{%- set cnt = [] -%}{%- for n in p.nodes -%}{%- set _ = cnt.push(0) -%}{%- endfor -%}
+{%- set row = [] -%}
+{%- for n in p.nodes -%}{%- set l = lvl[loop.index0] -%}{%- set _ = row.push(cnt[l]) -%}{%- set _ = cnt.splice(l, 1, cnt[l] + 1) -%}{%- endfor -%}
+{%- set maxL = (lvl | sort | last) -%}{%- set maxR = (cnt | sort | last) -%}
+{%- set bw = 170 -%}{%- set bh = 46 -%}{%- set sx = 215 -%}{%- set sy = 66 -%}
+{%- set W = 20 + maxL * sx + bw -%}{%- set H = 20 + (maxR - 1) * sy + bh -%}
+{%- set pid = loop.index -%}
+{%- set sv = ['<div style="overflow-x:auto"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Flow of ' + (p.name | escape) + '" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" font-family="Helvetica,Arial,sans-serif"><defs><marker id="ah-' + pid + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b7c93"/></marker></defs>'] -%}
+{%- for e in p.edges -%}
+{%- set fi = p.nodes.indexOf(e.from) -%}{%- set ti = p.nodes.indexOf(e.to) -%}
+{%- set x1 = 10 + lvl[fi] * sx + bw -%}{%- set y1 = 10 + row[fi] * sy + bh / 2 -%}
+{%- set x2 = 10 + lvl[ti] * sx -%}{%- set y2 = 10 + row[ti] * sy + bh / 2 -%}
+{%- set _ = sv.push('<path d="M' + x1 + ',' + y1 + ' C' + (x1 + 22) + ',' + y1 + ' ' + (x2 - 22) + ',' + y2 + ' ' + x2 + ',' + y2 + '" fill="none" stroke="#6b7c93" stroke-width="1.3" marker-end="url(#ah-' + pid + ')"/>') -%}
+{%- endfor -%}
+{%- for n in p.nodes -%}
 {%- set ti = p.tnames.indexOf(n) -%}{%- set ty = ((p.types[ti] | lower) if ti >= 0 else "") -%}
 {%- set fill = "#e8f4f8" -%}
 {%- if ty.endsWith(".receive") or ty.endsWith("receivemessage") or ty.endsWith("listener") or ty.endsWith("timer") or ty.endsWith("onstartup") or ty.endsWith("onevent") or n == "Start" -%}{%- set fill = "#c8e6c9" -%}
@@ -66,14 +81,15 @@ digraph "${{ p.name }}" {
 {%- elif ty.endsWith("catch") or ty.endsWith("throw") or ty.endsWith("rethrow") or ty.endsWith("error") -%}{%- set fill = "#ffcdd2" -%}
 {%- elif ty.endsWith("callprocess") -%}{%- set fill = "#bbdefb" -%}
 {%- elif ty.endsWith(".log") -%}{%- set fill = "#eceff1" -%}
-{%- endif %}
-  "${{ n }}" [label="${{ n }}${{ ("\\n" + (ty | replace("bw.", ""))) if ty != "" else "" }}", fillcolor="${{ fill }}"];
-{% endfor -%}
-{% for e in p.edges -%}
-  "${{ e.from }}" -> "${{ e.to }}";
-{% endfor -%}
-}
-```
+{%- endif -%}
+{%- set nx = 10 + lvl[loop.index0] * sx -%}{%- set ny = 10 + row[loop.index0] * sy -%}
+{%- set label = (n.substring(0, 23) + "…") if n.length > 24 else n -%}
+{%- set _ = sv.push('<g><title>' + (n | escape) + '</title><rect x="' + nx + '" y="' + ny + '" width="' + bw + '" height="' + bh + '" rx="8" fill="' + fill + '" stroke="#6b7c93"/><text x="' + (nx + bw / 2) + '" y="' + (ny + (19 if ty != "" else 28)) + '" text-anchor="middle" font-size="12" fill="#1f2933">' + (label | escape) + '</text>') -%}
+{%- if ty != "" -%}{%- set _ = sv.push('<text x="' + (nx + bw / 2) + '" y="' + (ny + 35) + '" text-anchor="middle" font-size="9" fill="#52606d">' + ((ty | replace("bw.", "")).substring(0, 32) | escape) + '</text>') -%}{%- endif -%}
+{%- set _ = sv.push('</g>') -%}
+{%- endfor -%}
+{%- set _ = sv.push('</svg></div>') -%}
+${{ sv.join("") }}
 
 {% endif -%}
 | From | To |
