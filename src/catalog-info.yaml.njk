@@ -58,16 +58,19 @@ spec:
 {%- if apiRefs.length > 0 %}
   providesApis: ${{ apiRefs | dump }}
 {%- endif %}
+{%- if consumes.length > 0 %}
+  consumesApis: ${{ consumes | dump }}
+{%- endif %}
 {%- if resRefs.length > 0 %}
   dependsOn: ${{ resRefs | dump }}
 {%- endif %}
 {%- for f in values.bw_swagger_files %}
-{%- set apiBase = (f.split("/") | last).split(".")[0] %}
+{%- set apiBase = (f.split("/") | last).replace(r/\.[^.]*$/, "") %}
 ---
 apiVersion: backstage.io/v1alpha1
 kind: API
 metadata:
-  name: ${{ (lid + "-" + (apiBase | lower)) | dump }}
+  name: ${{ apiNames[loop.index0] | dump }}
   title: ${{ (values.bw_api_title[0] if (loop.first and values.bw_api_title and values.bw_api_title[0]) else apiBase) | dump }}
   description: ${{ (values.bw_api_description[0] if (loop.first and values.bw_api_description and values.bw_api_description[0]) else ("OpenAPI definition " + f + " from the " + app + " BusinessWorks project")) | dump }}
   tags: [openapi, businessworks]
@@ -83,6 +86,59 @@ spec:
   system: ${{ values.system | dump }}
   definition:
     $text: ${{ (blobPre + ((folder + f) | replace(" ", "%20")) + blobSuf) | dump }}
+{%- endfor %}
+{%- for f in (values.bw_wsdl_files or []) %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: ${{ wsdlNames[loop.index0] | dump }}
+  title: ${{ ((f.split("/") | last).replace(r/\.[^.]*$/, "")) | dump }}
+  description: ${{ (("WSDL consumed by " if wsdlConsumed[loop.index0] else "WSDL provided by ") + app + ": " + f) | dump }}
+  tags: [soap, wsdl, businessworks]
+  tibco.developer.hub/topology:
+    theme:
+      name: 'purple'
+  annotations:
+    backstage.io/source-location: ${{ ("url:" + blobPre + ((folder + f) | replace(" ", "%20")) + blobSuf) | dump }}
+spec:
+  type: wsdl
+  lifecycle: ${{ values.lifecycle | dump }}
+  owner: ${{ values.owner | dump }}
+  system: ${{ values.system | dump }}
+  definition:
+    $text: ${{ (blobPre + ((folder + f) | replace(" ", "%20")) + blobSuf) | dump }}
+{%- endfor %}
+{%- for oa in outApis %}
+{%- if oaEmit[loop.index0] %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: ${{ oaIds[loop.index0] | dump }}
+  title: ${{ ((oa.kind + " " + oa.name) | truncate(80, true, "...")) | dump }}
+  description: ${{ (oa.kind + " service called by " + (oa.procs | join(", ")) + " in " + app + ((" (" + oa.loc + ")") if oa.loc != "" else "") + ". Found from the call activities; the interface is not available in the project.") | dump }}
+  tags: [${{ "soap" if oa.kind == "SOAP" else ("rest" if oa.kind == "REST" else "http") }}, external]
+  tibco.developer.hub/topology:
+    theme:
+      name: 'purple'
+  annotations:
+    tibco.com/called-from: ${{ (oa.acts | join(", ")) | dump }}
+{%- if oa.loc != "" %}
+    tibco.com/endpoint: ${{ oa.loc | dump }}
+{%- endif %}
+spec:
+  type: ${{ ("wsdl" if oa.kind == "SOAP" else "openapi") | dump }}
+  lifecycle: ${{ values.lifecycle | dump }}
+  owner: ${{ values.owner | dump }}
+  system: ${{ values.system | dump }}
+  definition: |
+    # Placeholder: the interface of this service is not part of the BusinessWorks project.
+    # kind: ${{ oa.kind }}
+    # operations: ${{ (oa.ops | join(", ")) if oa.ops.length > 0 else "unknown" }}
+    # methods: ${{ (oa.meth | join(", ")) if oa.meth.length > 0 else "unknown" }}
+    # path: ${{ oa.path if oa.path != "" else "unknown" }}${{ ("\n    # observed values: " + (oa.hints | join("; "))) if oa.hints.length > 0 else "" }}
+{%- endif %}
 {%- endfor %}
 {%- if brokerUrl != "" and emitInfra %}
 ---
@@ -103,34 +159,62 @@ spec:
   owner: ${{ values.owner | dump }}
   system: ${{ values.system | dump }}
 {%- endif %}
-{%- if jdbcUrl != "" %}
+{%- if jdbcUrl != "" and emitDb %}
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: ${{ dbId | dump }}
-  title: Database
-  description: ${{ ("Database used by " + app + ", taken from the project's deployment configuration.") | dump }}
+  title: ${{ (("Database " + (jdbcUrl.replace("jdbc:", "") | truncate(60, true, "..."))) if dbShared else "Database") | dump }}
+  description: ${{ ((("Shared database at " + jdbcUrl + ". Defined by the import of " + app + "; other applications reference it.") if dbShared else ("Database used by " + app + ", taken from the project's deployment configuration.")) + ((" Tables used by " + app + ": " + (dbTables | join(", ")) + ".") if dbTables.length > 0 else "")) | dump }}
   tags: [database, jdbc]
   tibco.developer.hub/topology:
     theme:
       name: 'green'
   annotations:
     tibco.com/jdbc-url: ${{ jdbcUrl | dump }}
+{%- if dbTables.length > 0 %}
+    tibco.com/tables-used: ${{ (dbTables | join(", ")) | dump }}
+{%- endif %}
 spec:
   type: database
   owner: ${{ values.owner | dump }}
   system: ${{ values.system | dump }}
 {%- endif %}
-{%- for q in (dests if emitInfra else []) %}
+{%- for tk in tkTech %}
+{%- if tkEmit[loop.index0] %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ tkId[loop.index0] | dump }}
+  title: ${{ (tk + " " + ((tkUrl[loop.index0]) if tkUrl[loop.index0] != "" else "connection")) | dump }}
+  description: ${{ ("Messaging system (" + tk + ") used by " + app + ((", at " + tkUrl[loop.index0]) if tkUrl[loop.index0] != "" else "") + ". Taken from the activities of the BusinessWorks project.") | dump }}
+  tags: [${{ tkSlug[loop.index0] }}, messaging]
+  tibco.developer.hub/topology:
+    theme:
+      name: 'orange'
+{%- if tkUrl[loop.index0] != "" %}
+  annotations:
+    tibco.com/connection-url: ${{ tkUrl[loop.index0] | dump }}
+{%- endif %}
+spec:
+  type: ${{ (tkSlug[loop.index0] + "-cluster") | dump }}
+  owner: ${{ values.owner | dump }}
+  system: ${{ values.system | dump }}
+{%- endif %}
+{%- endfor %}
+{%- for q in dests %}
+{%- if qEmit[loop.index0] %}
+{%- set qlabel = (("EMS " if q.tech == "JMS" else (q.tech + " ")) + ("topic" if q.topic else ("queue" if q.tech == "JMS" else "destination"))) %}
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: ${{ qids[loop.index0] | dump }}
   title: ${{ q.name | dump }}
-  description: ${{ (("EMS topic " if q.topic else "EMS queue ") + q.name + ((" (configuration variable " + q["var"] + ")") if q["var"] != "" else " (named in a process)") + ((". Produced by " + (q.producers | join(", "))) if q.producers.length > 0 else "") + ((". Consumed by " + (q.consumers | join(", "))) if q.consumers.length > 0 else "")) | dump }}
-  tags: [tibco-ems, ${{ "topic" if q.topic else "queue" }}]
+  description: ${{ (qlabel + " " + q.name + ((" (configuration variable " + q["var"] + ")") if q["var"] != "" else " (named in a process)") + ((". Produced by " + (q.producers | join(", "))) if q.producers.length > 0 else "") + ((". Consumed by " + (q.consumers | join(", "))) if q.consumers.length > 0 else "") + ".") | dump }}
+  tags: [${{ ("tibco-ems" if q.tech == "JMS" else (q.tech | lower | replace(r/[^a-z0-9]+/g, "-"))) }}, ${{ "topic" if q.topic else "queue" }}]
   tibco.developer.hub/topology:
     theme:
       name: 'yellow'
@@ -146,21 +230,22 @@ metadata:
     tibco.com/consumers: ${{ (q.consumers | join(", ")) | dump }}
 {%- endif %}
 spec:
-  type: ${{ "jms-topic" if q.topic else "jms-queue" }}
+  type: ${{ ((("jms-topic" if q.topic else "jms-queue") if q.tech == "JMS" else ((q.tech | lower | replace(r/[^a-z0-9]+/g, "-")) + ("-topic" if q.topic else "-destination")))) | dump }}
   owner: ${{ values.owner | dump }}
   system: ${{ values.system | dump }}
-{%- if brokerUrl != "" %}
-  dependsOn: ${{ ["resource:default/" + brokerId] | dump }}
+{%- if qBroker[loop.index0] != "" %}
+  dependsOn: ${{ ["resource:default/" + qBroker[loop.index0]] | dump }}
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 {%- for f in values.bw_resources %}
-{%- set rbase = (f.split("/") | last).split(".")[0] %}
+{%- set rbase = (f.split("/") | last).replace(r/\.[^.]*$/, "") %}
 {%- set rext = (f.split("/") | last).split(".") | last %}
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: ${{ (lid + "-" + (rbase | lower)) | dump }}
+  name: ${{ resNames[loop.index0] | dump }}
   title: ${{ rbase | dump }}
   description: ${{ ("BusinessWorks shared resource (" + rext + ") defined in " + f) | dump }}
   tags: [businessworks, shared-resource]

@@ -16,6 +16,8 @@ ${{ desc }}
 | Activities | ${{ totalActs }} |
 | REST operations | ${{ restOps }} |
 | Messaging destinations | ${{ dests.length }} |
+| Outbound APIs called | ${{ outApis.length }} |
+| Input mappings | ${{ totalMaps }} |
 | API descriptors | ${{ values.bw_swagger_files.length }} |
 | Shared resources | ${{ values.bw_resources.length }} |
 | Schemas | ${{ values.bw_schemas.length }} |
@@ -45,7 +47,8 @@ ${{ desc }}
 ## Pages
 
 - [Processes](processes.md): triggers, call tree and per-process activity summary
-- [Messaging](messaging.md): queues and topics with their producers and consumers
+- [Messaging](messaging.md): queues, topics and endpoints (JMS, Kafka, FTL and others) with their producers and consumers
+- [Mappings](mappings.md): how data moves between systems and between activities
 - [API](api.md): endpoints and the process that implements each
 - [Resources and configuration](resources.md): shared resources, external dependencies and variables
 - [Schemas](schemas.md): the data contracts

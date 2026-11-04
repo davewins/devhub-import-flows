@@ -1,26 +1,29 @@
 {#@@ANALYSIS@@#}
 # Messaging
 
-${{ dests.length }} queue${{ "" if dests.length == 1 else "s" }} / topic${{ "" if dests.length == 1 else "s" }} used by the processes. Producers include request/reply senders.
+${{ dests.length }} destination${{ "" if dests.length == 1 else "s" }} (queues, topics, endpoints, subjects) used by the processes. Producers include request/reply senders.
 
 {% if dests.length == 0 -%}
-No JMS activity was found in the processes.
+No messaging activity (JMS, Kafka, FTL, Rendezvous, MQ and similar) was found in the processes.
 {% else -%}
-| Destination | Kind | Configuration variable | Producers | Consumers |
-|---|---|---|---|---|
+| Destination | Technology | Kind | Configuration variable | Producers | Consumers |
+|---|---|---|---|---|---|
 {% for d in dests -%}
-| `${{ d.name }}` | ${{ "topic" if d.topic else "queue" }} | ${{ ("`" + d["var"] + "`") if d["var"] != "" else "-" }} | ${{ (d.producers | join(", ")) if d.producers.length > 0 else "-" }} | ${{ (d.consumers | join(", ")) if d.consumers.length > 0 else "-" }} |
+| `${{ d.name }}` | ${{ d.tech if d.tech != "" else "JMS" }} | ${{ "topic" if d.topic else ("queue" if d.tech == "JMS" else "destination") }} | ${{ ("`" + d["var"] + "`") if d["var"] != "" else "-" }} | ${{ (d.producers | join(", ")) if d.producers.length > 0 else "-" }} | ${{ (d.consumers | join(", ")) if d.consumers.length > 0 else "-" }} |
 {% endfor %}
 
-${{ ("Broker: `" + brokerUrl + "`") if brokerUrl != "" else "" }}
+${{ ("EMS broker: `" + brokerUrl + "`") if brokerUrl != "" else "" }}
+{% for tk in tkTech %}
+${{ ("- " + tk + " connection: `" + tkUrl[loop.index0] + "`") if tkUrl[loop.index0] != "" else "" }}
+{% endfor %}
 
 ## Messaging activities
 
-| Process | Activity | Type | Destination | Connection |
-|---|---|---|---|---|
+| Process | Activity | Technology | Type | Direction | Destination | Connection |
+|---|---|---|---|---|---|---|
 {% for e in extActs -%}
 {% if e.kind != "" -%}
-| ${{ e.proc }} | ${{ e.name if e.name != "" else "-" }} | `${{ e.type }}` | ${{ e.detail | replace("destination ", "") if e.detail != "" else "-" }} | ${{ e.conn if e.conn != "" else "-" }} |
+| ${{ e.proc }} | ${{ e.name if e.name != "" else "-" }} | ${{ e.tech }} | `${{ e.type }}` | ${{ "request / reply" if e.kind == "request" else ("receive" if e.kind == "receive" else "send") }} | ${{ e.detail | replace("destination ", "") if e.detail != "" else "-" }} | ${{ e.conn if e.conn != "" else "-" }} |
 {% endif -%}
 {% endfor %}
 {% endif %}

@@ -54,35 +54,61 @@ ${{ '    ' }}- **${{ e.name if e.name != "" else e.type }}** (`${{ e.type }}`)${
 
 {% if values.processDiagrams -%}
 {%- set nn = p.nodes.length -%}
+{%- set ncomp = p.glabels.length -%}
 {%- set lvl = [] -%}{%- for n in p.nodes -%}{%- set _ = lvl.push(0) -%}{%- endfor -%}
 {%- for pass in range(nn) -%}{%- for e in p.edges -%}
 {%- set fi = p.nodes.indexOf(e.from) -%}{%- set ti = p.nodes.indexOf(e.to) -%}
 {%- if lvl[ti] < lvl[fi] + 1 and lvl[fi] < nn -%}{%- set _ = lvl.splice(ti, 1, lvl[fi] + 1) -%}{%- endif -%}
 {%- endfor -%}{%- endfor -%}
-{%- set cnt = [] -%}{%- for n in p.nodes -%}{%- set _ = cnt.push(0) -%}{%- endfor -%}
-{%- set row = [] -%}
-{%- for n in p.nodes -%}{%- set l = lvl[loop.index0] -%}{%- set _ = row.push(cnt[l]) -%}{%- set _ = cnt.splice(l, 1, cnt[l] + 1) -%}{%- endfor -%}
-{%- set maxL = (lvl | sort | last) -%}{%- set maxR = (cnt | sort | last) -%}
-{%- set bw = 170 -%}{%- set bh = 46 -%}{%- set sx = 215 -%}{%- set sy = 66 -%}
-{%- set W = 20 + maxL * sx + bw -%}{%- set H = 20 + (maxR - 1) * sy + bh -%}
+{%- set cnt = [] -%}{%- for k in range((ncomp + 1) * (nn + 1)) -%}{%- set _ = cnt.push(0) -%}{%- endfor -%}
+{%- set row = [] -%}{%- set crow = [] -%}{%- set cmaxl = [] -%}
+{%- for k in range(ncomp) -%}{%- set _ = crow.push(0) -%}{%- set _ = cmaxl.push(0) -%}{%- endfor -%}
+{%- for n in p.nodes -%}
+{%- set c = p.comp[loop.index0] -%}{%- set l = lvl[loop.index0] -%}{%- set ck = c * (nn + 1) + l -%}
+{%- set _ = row.push(cnt[ck]) -%}{%- set _ = cnt.splice(ck, 1, cnt[ck] + 1) -%}
+{%- if cnt[ck] > crow[c] -%}{%- set _ = crow.splice(c, 1, cnt[ck]) -%}{%- endif -%}
+{%- if l > cmaxl[c] -%}{%- set _ = cmaxl.splice(c, 1, l) -%}{%- endif -%}
+{%- endfor -%}
+{%- set bw = 170 -%}{%- set bh = 46 -%}{%- set sx = 250 -%}{%- set sy = 66 -%}
+{%- set cy = [] -%}{%- set ytop = [10] -%}
+{%- for c in range(ncomp) -%}
+{%- if c > 0 -%}{%- set _ = ytop.splice(0, 1, ytop[0] + 30) -%}{%- endif -%}
+{%- set _ = cy.push(ytop[0]) -%}
+{%- set _ = ytop.splice(0, 1, ytop[0] + (crow[c] if crow[c] > 0 else 1) * sy + (4 if c > 0 else 0)) -%}
+{%- endfor -%}
+{%- set W = 20 + (cmaxl | sort | last) * sx + bw -%}{%- set H = ytop[0] + 6 -%}
+{%- set sv = ['<div style="overflow-x:auto"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Flow of ' + (p.name | escape) + '" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" font-family="Helvetica,Arial,sans-serif"><defs><marker id="ah-' + loop.index + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b7c93"/></marker><marker id="ae-' + loop.index + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c62828"/></marker></defs>'] -%}
 {%- set pid = loop.index -%}
-{%- set sv = ['<div style="overflow-x:auto"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Flow of ' + (p.name | escape) + '" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" font-family="Helvetica,Arial,sans-serif"><defs><marker id="ah-' + pid + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b7c93"/></marker></defs>'] -%}
+{%- for c in range(ncomp) -%}
+{%- if c > 0 -%}
+{%- set bx2 = 4 + (cmaxl[c] + 1) * sx - 25 -%}
+{%- set _ = sv.push('<g><rect x="4" y="' + (cy[c] - 26) + '" width="' + bx2 + '" height="' + ((crow[c] if crow[c] > 0 else 1) * sy + 20) + '" rx="10" fill="none" stroke="#9aa5b1" stroke-dasharray="6 4"/><text x="12" y="' + (cy[c] - 11) + '" font-size="11" font-style="italic" fill="#52606d">' + (p.glabels[c] | escape) + '</text></g>') -%}
+{%- endif -%}
+{%- endfor -%}
 {%- for e in p.edges -%}
 {%- set fi = p.nodes.indexOf(e.from) -%}{%- set ti = p.nodes.indexOf(e.to) -%}
-{%- set x1 = 10 + lvl[fi] * sx + bw -%}{%- set y1 = 10 + row[fi] * sy + bh / 2 -%}
-{%- set x2 = 10 + lvl[ti] * sx -%}{%- set y2 = 10 + row[ti] * sy + bh / 2 -%}
-{%- set _ = sv.push('<path d="M' + x1 + ',' + y1 + ' C' + (x1 + 22) + ',' + y1 + ' ' + (x2 - 22) + ',' + y2 + ' ' + x2 + ',' + y2 + '" fill="none" stroke="#6b7c93" stroke-width="1.3" marker-end="url(#ah-' + pid + ')"/>') -%}
+{%- set x1 = 10 + lvl[fi] * sx + bw -%}{%- set y1 = cy[p.comp[fi]] + row[fi] * sy + bh / 2 -%}
+{%- set x2 = 10 + lvl[ti] * sx -%}{%- set y2 = cy[p.comp[ti]] + row[ti] * sy + bh / 2 -%}
+{%- set isErr = ("ERROR" in e.lt) -%}
+{%- set _ = sv.push('<path d="M' + x1 + ',' + y1 + ' C' + (x1 + 22) + ',' + y1 + ' ' + (x2 - 22) + ',' + y2 + ' ' + x2 + ',' + y2 + '" fill="none" stroke="' + ('#c62828' if isErr else '#6b7c93') + '" stroke-width="1.3"' + (' stroke-dasharray="5 3"' if isErr else '') + ' marker-end="url(#' + ('ae-' if isErr else 'ah-') + pid + ')"/>') -%}
+{%- set ec = e.cond.replace("##otherwise##", "otherwise").replace(r/^\s+|\s+$/g, "") -%}
+{%- set ec = ((ec.split("/") | last).replace(r/^\$?\w+:/, "")) if ec.length > 14 else ec -%}
+{%- set elab = ((ec.substring(0, 13) + "…") if ec.length > 14 else ec) if ec != "" else ("otherwise" if e.lt == "SUCCESSWITHNOCONDITION" else ("on error" if isErr else "")) -%}
+{%- if elab != "" -%}{%- set _ = sv.push('<text x="' + ((x1 + x2) / 2) + '" y="' + ((y1 + y2) / 2 - 4) + '" text-anchor="middle" font-size="9" font-style="italic" fill="' + ('#c62828' if isErr else '#52606d') + '"><title>' + (e.cond | escape) + '</title>' + (elab | escape) + '</text>') -%}{%- endif -%}
 {%- endfor -%}
 {%- for n in p.nodes -%}
 {%- set ti = p.tnames.indexOf(n) -%}{%- set ty = ((p.types[ti] | lower) if ti >= 0 else "") -%}
 {%- set fill = "#e8f4f8" -%}
-{%- if ty.endsWith(".receive") or ty.endsWith("receivemessage") or ty.endsWith("listener") or ty.endsWith("timer") or ty.endsWith("onstartup") or ty.endsWith("onevent") or n == "Start" -%}{%- set fill = "#c8e6c9" -%}
-{%- elif ty.endsWith(".reply") or ty.endsWith(".end") or n == "End" -%}{%- set fill = "#ffe0b2" -%}
+{%- if ty.endsWith(".receive") or ty.endsWith("receivemessage") or ty.endsWith("listener") or ty.endsWith("timer") or ty.endsWith("onstartup") or ty.endsWith("onevent") or n == "Start" or n.match(r/^GroupStart/) -%}{%- set fill = "#c8e6c9" -%}
+{%- elif ty.endsWith(".reply") or ty.endsWith(".end") or n == "End" or n.match(r/^GroupEnd/) -%}{%- set fill = "#ffe0b2" -%}
 {%- elif ty.endsWith("catch") or ty.endsWith("throw") or ty.endsWith("rethrow") or ty.endsWith("error") -%}{%- set fill = "#ffcdd2" -%}
 {%- elif ty.endsWith("callprocess") -%}{%- set fill = "#bbdefb" -%}
 {%- elif ty.endsWith(".log") -%}{%- set fill = "#eceff1" -%}
+{%- elif ty.startsWith("bw.jms.") or ty.startsWith("bw.kafka.") or ty.startsWith("bw.ftl.") or ty.startsWith("bw.rv.") or ty.startsWith("bw.mq.") -%}{%- set fill = "#fff3c4" -%}
+{%- elif ty.startsWith("bw.http.") or ty.startsWith("bw.soap.") or ty.startsWith("bw.ws.") or ty.startsWith("bw.rest") -%}{%- set fill = "#e1d5f0" -%}
+{%- elif ty.startsWith("bw.jdbc.") -%}{%- set fill = "#d7f0dc" -%}
 {%- endif -%}
-{%- set nx = 10 + lvl[loop.index0] * sx -%}{%- set ny = 10 + row[loop.index0] * sy -%}
+{%- set nx = 10 + lvl[loop.index0] * sx -%}{%- set ny = cy[p.comp[loop.index0]] + row[loop.index0] * sy -%}
 {%- set label = (n.substring(0, 23) + "…") if n.length > 24 else n -%}
 {%- set _ = sv.push('<g><title>' + (n | escape) + '</title><rect x="' + nx + '" y="' + ny + '" width="' + bw + '" height="' + bh + '" rx="8" fill="' + fill + '" stroke="#6b7c93"/><text x="' + (nx + bw / 2) + '" y="' + (ny + (19 if ty != "" else 28)) + '" text-anchor="middle" font-size="12" fill="#1f2933">' + (label | escape) + '</text>') -%}
 {%- if ty != "" -%}{%- set _ = sv.push('<text x="' + (nx + bw / 2) + '" y="' + (ny + 35) + '" text-anchor="middle" font-size="9" fill="#52606d">' + ((ty | replace("bw.", "")).substring(0, 32) | escape) + '</text>') -%}{%- endif -%}
@@ -90,6 +116,8 @@ ${{ '    ' }}- **${{ e.name if e.name != "" else e.type }}** (`${{ e.type }}`)${
 {%- endfor -%}
 {%- set _ = sv.push('</svg></div>') -%}
 ${{ sv.join("") }}
+
+Legend: green start, orange end, blue sub-process call, yellow messaging, purple HTTP/SOAP/REST, green database, red fault handling; dashed lines are error paths.
 
 {% endif -%}
 | From | To |

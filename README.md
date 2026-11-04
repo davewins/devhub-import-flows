@@ -59,13 +59,16 @@ catalog entries from what is in the project, commits them to the repository and 
 | `META-INF/default.substvar` (application profile over module defaults) | **Resource** for the EMS broker, the database and each queue/topic variable, with `dependsOn` relations |
 | `Processes/**/*.bwp` | per-process inventory (trigger, activity types, calls to other processes, fault handlers), a **call tree** from each entry point, and "called by" |
 | links between activities in the `.bwp` files | **flow** of each process: an SVG diagram and a From / To table (see below) |
-| JMS activities in the processes | **messaging map**: each queue/topic Resource says which processes produce to it and which consume from it; a destination named only inside a process gets its own Resource |
+| messaging activities in the processes (JMS, Kafka, FTL, Rendezvous, MQ, AMQP, MQTT) | **messaging map**: each queue/topic Resource says which processes produce to it and which consume from it; a destination named only inside a process gets its own Resource |
 | REST bindings in `module.bwm` and the processes | which process implements each REST operation (on the API page) |
-| other palette activities (JDBC, HTTP, SOAP, files ...) | "systems the processes talk to": process, activity, connection resource and the URL/SQL attribute where one exists |
+| other palette activities (JDBC, HTTP, SOAP, files ...) | "systems the processes talk to": process, activity, technology, connection resource, URL/SQL and literal host/URI values typed into the mapping |
+| REST and SOAP reference bindings, HTTP client activities | **API** entities for the services the application calls, linked with `consumesApis` (see *Outbound APIs*) |
+| `Service Descriptors/*.wsdl` | **API** (type `wsdl`), provided or consumed |
+| input mappings (`tibex:inputBinding` XSLT) | a **Mappings** page: system-to-system data flow and a per-activity field table |
 | `Schemas/*.xsd` | schema page: top-level elements and types per file |
 | configuration and process structure | **findings** page: hardcoded private IPs, plain `http://` URLs, secret-like variables with plain values, placeholder `Sleep` activities, processes without fault handlers, unreferenced processes, no logging, no tests (secret values are never read into the page) |
 | `.ear` files and `Tests/` | release artefacts and test-file counts |
-| the whole project | **TechDocs** (overview, processes, messaging, API, resources, schemas, findings) |
+| the whole project | **TechDocs** (overview, processes, messaging, mappings, API, resources, schemas, findings) |
 | form | owner, system, domain, lifecycle (a BW project cannot tell you these); optional System and Domain entities |
 
 Everything is written under one folder (default `devhub/`) in the repository. Files you maintain by hand,
@@ -115,16 +118,68 @@ template ships with github.com, gitlab.com, bitbucket.org and the author's own F
 The processes page has a **Flow of &lt;process&gt;** section for every process: a diagram plus a From / To table.
 The diagram is an SVG drawn by the import template itself (a simple left-to-right layered layout) and written into
 the page as inline markup. **Nothing needs installing on the TechDocs host** - no Graphviz, no mkdocs plugin, no
-JavaScript - so it works on the standard Developer Hub image. Nodes are coloured by activity type (start green,
-end/reply orange, sub-process calls blue, catch/throw red, logging grey) with the activity type under the name.
+JavaScript - so it works on the standard Developer Hub image.
+
+* Nodes are coloured by activity type: start green, end orange, sub-process call blue, messaging yellow,
+  HTTP/SOAP/REST purple, database green, fault handling red. The activity type is printed under the name.
+* Transitions that carry a condition are labelled with it (hover for the full text); the "otherwise" path is labelled;
+  error paths are red and dashed.
+* Group bodies (for example an *Iterate* group) and fault handlers are drawn as dashed boxes under the main flow,
+  labelled with the group name.
 
 It is on by default; untick **Draw process flow diagrams in the documentation** (`processDiagrams`) to get the table only.
-Wide processes scroll sideways. The layout is deliberately basic: edges that skip a column can pass behind a box, and
-there is no nesting of groups or display of link conditions.
+Wide processes scroll sideways. The layout is deliberately basic: an edge that skips a column can pass behind a box,
+and groups are drawn beneath the main flow rather than nested inside the group activity. Boxes are matched to group
+names by order, and a fault handler is recognised only because its links are disconnected from the main flow.
 
 The diagram is drawn from the BPEL links in the `.bwp` files (`<sources>` / `<targets>`), so it shows the logical flow
-of the process, not the canvas layout you see in BusinessWorks Studio. Link conditions and fault paths are not drawn,
-and the activities inside a group appear in the same graph as the group, without a box around them.
+of the process, not the canvas layout you see in BusinessWorks Studio.
+
+### Supported technologies (the activity registry)
+
+The importer recognises activities by their type prefix, in a table at the top of `src/_analysis.njk`. Each row gives
+a technology label, a category (messaging, http, soap, db, file, other), the attribute names that hold the destination
+and, for messaging, a hint for finding the broker address among the configuration variables.
+
+| Technology | Prefix | What is produced |
+|---|---|---|
+| JMS | `bw.jms.` | queue/topic Resources, EMS broker Resource (shared modes name them by address) |
+| Kafka, FTL, Rendezvous, MQ, AMQP, MQTT | `bw.kafka.` `bw.ftl.` `bw.rv.` `bw.mq.` `bw.amqp.` `bw.mqtt.` | a destination Resource per topic/endpoint/subject with producers and consumers, plus a cluster Resource found from a configuration variable whose name contains the hint (`bootstrap`, `kafka`, `ftl`, `realm` ...) |
+| HTTP, REST, SOAP | `bw.http.` `bw.restjson.rest` `bw.soap.` `bw.ws.` and reference bindings | listed under systems; outbound calls become consumed APIs |
+| JDBC, MongoDB | `bw.jdbc.` `bw.mongodb.` | listed under systems; tables read from the SQL; the database Resource is shared by connection URL in the shared modes |
+| File, SFTP, FTP, mail, TCP, Salesforce, SAP | `bw.file.` `bw.sftp.` ... | listed under systems |
+
+To support another plugin, add a row. An activity that matches no row is still listed under its type name.
+
+**Verified against real projects:** JMS, JDBC, HTTP client, REST reference binding and SOAP reference binding
+(BW 2.10 `bwcf` project plus the TIBCO `bw-samples`, `bw-sample-for-soap-currency-converter` repositories).
+**Not verified:** Kafka, FTL, Rendezvous, MQ, AMQP, MQTT. No real project using them was available, so those rows
+assume the plugins follow the same `bw.<plugin>.<activity>` naming and carry the destination in an attribute named in the
+row. They were tested only against copies of a JMS project edited to look like Kafka and FTL. If a destination is not
+picked up, check the attribute name in your `.bwp` and adjust the row's `attrs`.
+
+### Mappings
+
+The **Mappings** page is built from each activity's input mapping, which BusinessWorks stores as an XSLT stylesheet.
+
+* **Data flow between systems**: mappings that feed an activity talking to another system, and the reply of each
+  process, with the source (process input, an earlier activity, a module property) and the target field.
+* **Mappings per process**: for each activity, target field, the source expression exactly as written, and the
+  activity or process input it takes data from. A condition such as `for each ...` is shown beside the expression.
+
+Expressions are not interpreted: loops, conditions and custom functions are shown as written. Only `$variable`
+references to declared process variables count as sources, so XSLT loop variables are ignored. A mapping assembled
+across several steps appears as separate rows rather than one end-to-end lineage. The system table stops at 250 rows
+and each activity at 60.
+
+### Outbound APIs
+
+A REST or SOAP reference binding, and an HTTP client activity, becomes an **API** entity that the Component lists under
+`consumesApis`, so the topology shows application, API. The interface is not part of the project, so the entity holds a
+placeholder definition with the operations, methods, path and any literal host or URI found in the mapping. Resource
+and API naming follows `infraMode` (`per-app`: named after the application; shared modes: named after the endpoint,
+defined once). An HTTP client API is named after the literal URI in the mapping when there is one, otherwise after
+the connection.
 
 ### Shared broker and queue entities
 
@@ -172,19 +227,20 @@ folder is what the flow uses and is committed).
 
 ### Limitations
 
-* The process analysis is verified against JMS and REST projects. For other palettes (JDBC, HTTP client, SOAP, file,
-  mail ...) the activity is listed with its connection resource and any `url`/`path`/`statement` attribute, but those
-  attribute names have not been checked against a real project that uses them.
+* The process analysis is verified against JMS, JDBC, HTTP client, REST and SOAP reference projects. Kafka, FTL and the
+  other messaging rows in the activity registry are not (see *Supported technologies*).
 * Findings are heuristics, not a code review; some will be intentional.
 * The call tree follows *Call Process* activities only (not sub-process inline groups or dynamic calls).
-* Process diagrams show the link graph, not the Studio canvas, are drawn with a basic layout, and have been
-  checked against one BW 2.10 (`bwcf`) project only.
+* Process diagrams show the link graph, not the Studio canvas, and use a basic layout.
 * The branch list is static: Backstage's form has no built-in field that lists a repository's real branches
   (that needs a custom scaffolder field extension in the Developer Hub build), hence the *Other branch* override.
 * The first application and first module found are imported. Use the *Application name* field to choose
   another one in a repository that holds several.
-* Database Resources are still derived from `jdbc:` configuration variables; a database used only through a process
-  activity is listed under "systems the processes talk to" but does not get its own Resource.
+* Database Resources are derived from `jdbc:` configuration variables; a database named only inside an activity is
+  listed under "systems the processes talk to" but does not get its own Resource. Tables come from the SQL text of the
+  activities, not from the database.
+* Outbound API entities link only to the consuming application; the importer cannot tell which application provides a
+  called endpoint.
 * Bitbucket Server instances served under a context path (`https://host/bitbucket/...`) are not handled yet.
 * Generated descriptions are factual, not curated: edit the generated files to add team names, links and prose.
 

@@ -30,14 +30,33 @@ out on purpose.
 
 ## Systems the processes talk to
 
-Activities other than core and general activities, with their connection resource where one is named.
+Activities other than core and general activities, with their technology and connection resource where one is named.
+Values in the last column are literals typed into the activity's input mapping (host, URI, topic, table and similar).
 
 {% if extActs.length == 0 -%}
 No such activities were found.
 {% else -%}
-| Process | Activity | Type | Connection | Detail |
-|---|---|---|---|---|
+| Process | Activity | Technology | Type | Connection | Detail |
+|---|---|---|---|---|---|
 {% for e in extActs -%}
-| ${{ e.proc }} | ${{ e.name if e.name != "" else "-" }} | `${{ e.type }}` | ${{ e.conn if e.conn != "" else "-" }} | ${{ (e.detail if e.detail != "" else "-") | replace("|", "/") }} |
+| ${{ e.proc }} | ${{ e.name if e.name != "" else "-" }} | ${{ e.tech if e.tech != "" else "-" }} | `${{ e.type }}` | ${{ e.conn if e.conn != "" else "-" }} | ${{ (((e.detail + "; " if e.detail != "" else "") + (e.hints | join("; "))) if (e.detail != "" or e.hints.length > 0) else "-") | replace("|", "/") }} |
 {% endfor %}
+{% endif %}
+{% if outApis.length > 0 %}
+## Outbound APIs
+
+Services this application calls. Each one is a catalog API entity that the component consumes, so it appears in the
+topology view. The interface itself is not part of the project, so the entity holds only what the project says about it.
+
+| API | Kind | Endpoint | Called from | Operations |
+|---|---|---|---|---|
+{% for oa in outApis -%}
+| `${{ oaIds[loop.index0] }}` | ${{ oa.kind }} | ${{ oa.loc if oa.loc != "" else "-" }} | ${{ oa.acts | join(", ") }} | ${{ ((oa.ops | join(", ")) if oa.ops.length > 0 else (oa.hints | join("; ") if oa.hints.length > 0 else "-")) | replace("|", "/") }} |
+{% endfor %}
+{% endif %}
+{% if dbTables.length > 0 %}
+## Database tables
+
+Tables named in the SQL statements of the JDBC activities (read from the statements, not from the database):
+${{ dbTables | join(", ") }}.
 {% endif %}

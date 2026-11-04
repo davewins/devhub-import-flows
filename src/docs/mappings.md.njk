@@ -1,0 +1,67 @@
+{#@@ANALYSIS@@#}
+# Data mappings
+
+How data moves between systems and between activities. Every BusinessWorks activity has an input mapping (an XSLT
+transformation) that builds the activity's input from the process input and from the output of earlier activities
+(`$Start`, `$ActivityName`). This page lists those mappings, extracted from the process files. Expressions are shown as
+written in the project, so complex ones (loops, conditions, custom functions) are shown in full rather than interpreted;
+a condition such as `for each ...` applies to the rows beneath it.
+
+{% set totalMaps = 0 -%}
+{%- for p in procs -%}{%- set totalMaps = totalMaps + p.maps.length -%}{%- endfor -%}
+{% if totalMaps == 0 -%}
+No input mappings were found in the processes of this project.
+{% else -%}
+## Data flow between systems
+
+Mappings that feed an activity talking to another system (database, queue, topic, HTTP or SOAP service, file) or the
+reply of a process. The source is the activity or process input the value comes from.
+
+| Process | Source | Target | Target field | Expression |
+|---|---|---|---|---|
+{% set shown = [0] -%}
+{%- for p in procs -%}
+{%- set enames = [] -%}{%- for x in p.ext -%}{%- set _ = enames.push(x.name) -%}{%- endfor -%}
+{%- for m in p.maps -%}
+{%- set ti = enames.indexOf(m.act) -%}
+{%- set tact = p.tnames.indexOf(m.act) -%}
+{%- set tty = ((p.types[tact] | lower) if tact >= 0 else "") -%}
+{%- set isOut = tty.endsWith(".reply") or tty.endsWith(".end") -%}
+{%- if (ti >= 0 and p.ext[ti].tech != "") or isOut -%}
+{%- if shown[0] < 250 -%}
+{%- set src = [] -%}
+{%- for v in m.vars -%}{%- set k = enames.indexOf(v) -%}{%- set _ = src.push(("process input" if v == "Start" else v) + ((" (" + p.ext[k].tech + ")") if (k >= 0 and p.ext[k].tech != "") else "")) -%}{%- endfor -%}
+{%- for pr in m.props -%}{%- set _ = src.push("config " + pr) -%}{%- endfor -%}
+{%- set _ = shown.splice(0, 1, shown[0] + 1) -%}
+| ${{ p.name }} | ${{ (src | join(", ")) if src.length > 0 else ("constant" if m.const else "(computed)") }} | ${{ m.act }}${{ (" (" + p.ext[ti].tech + ")") if (ti >= 0 and p.ext[ti].tech != "") else (" (output)" if isOut else "") }} | `${{ m.to }}` | `${{ (m.expr | replace("|", "\\|") | truncate(110, true, "...")) }}` |
+{% endif -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endfor %}
+{% if shown[0] >= 250 %}
+The table is cut at 250 rows; the full mappings are listed per process below.
+{% endif %}
+## Mappings per process
+
+{% for p in procs -%}
+{%- if p.maps.length > 0 %}
+### ${{ p.name }}
+
+{% set last = [""] -%}
+{%- set rows = [0] -%}
+{%- for m in p.maps -%}
+{%- if m.act != last[0] %}
+#### ${{ m.act }}
+
+| Target field | Source expression | Takes data from |
+|---|---|---|
+{% set _ = last.splice(0, 1, m.act) -%}{%- set _ = rows.splice(0, 1, 0) -%}
+{%- endif -%}
+{%- if rows[0] < 60 -%}
+{%- set _ = rows.splice(0, 1, rows[0] + 1) -%}
+| `${{ m.to if m.to != "" else "(whole input)" }}` | `${{ (m.expr | replace("|", "\\|") | truncate(130, true, "...")) }}`${{ (" (" + m.ctx + ")") if (m.ctx != "" and m.ctx != ("when " + m.expr)) else "" }} | ${{ ((m.vars | join(", ")) if m.vars.length > 0 else ("constant" if m.const else "")) | replace("Start", "process input") }}${{ ((" ; config " + (m.props | join(", "))) if m.props.length > 0 else "") }} |
+{% endif -%}
+{%- endfor %}
+{% endif -%}
+{%- endfor -%}
+{%- endif %}

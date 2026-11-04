@@ -203,6 +203,11 @@ spec:
             glob: '**/Service Descriptors/*.json'
             regex:
               regexPattern: '\.json$'
+          bw_wsdl_files:
+            type: workspace
+            glob: '**/Service Descriptors/*.wsdl'
+            regex:
+              regexPattern: '\.wsdl$'
           bw_schemas:
             type: workspace
             glob: '**/Schemas/*.xsd'
@@ -370,6 +375,46 @@ spec:
             type: xml
             filePath: ${{ each.value }}
             xPath: "//*[local-name()='targets']/parent::*/@name"
+          p_binds:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='inputBinding']"
+          p_bind_owner:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='inputBinding']/ancestor::*[@name][1]/@name"
+          p_links:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='link'][@*[local-name()='linkType']]"
+          p_groups:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='scope'][@*[local-name()='group']]/@name"
+          p_refs:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='ReferenceBinding']"
+          p_ref_names:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='ReferenceBinding']/parent::*/@name"
+          p_invk_pl:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='invoke']/@partnerLink"
+          p_invk_names:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='invoke']/@name"
+          p_invk_ops:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='invoke']/@operation"
+          p_vars:
+            type: xml
+            filePath: ${{ each.value }}
+            xPath: "//*[local-name()='variable']/@name"
           p_catch:
             type: xml
             filePath: ${{ each.value }}
@@ -420,6 +465,7 @@ spec:
           bw_processes: ${{ steps.discover.output.bw_processes }}
           bw_resources: ${{ steps.discover.output.bw_resources }}
           bw_swagger_files: ${{ steps.discover.output.bw_swagger_files }}
+          bw_wsdl_files: ${{ steps.discover.output.bw_wsdl_files }}
           bw_schemas: ${{ steps.discover.output.bw_schemas }}
           bw_app_name: ${{ steps.extract.output.bw_app_name }}
           bw_app_description: ${{ steps.extract.output.bw_app_description }}
@@ -443,6 +489,16 @@ spec:
           bw_p_types: ${{ steps.processes.output.p_types }}
           bw_p_type_names: ${{ steps.processes.output.p_type_names }}
           bw_p_acts: ${{ steps.processes.output.p_acts }}
+          bw_p_vars: ${{ steps.processes.output.p_vars }}
+          bw_p_binds: ${{ steps.processes.output.p_binds }}
+          bw_p_bind_owner: ${{ steps.processes.output.p_bind_owner }}
+          bw_p_links: ${{ steps.processes.output.p_links }}
+          bw_p_groups: ${{ steps.processes.output.p_groups }}
+          bw_p_refs: ${{ steps.processes.output.p_refs }}
+          bw_p_ref_names: ${{ steps.processes.output.p_ref_names }}
+          bw_p_invk_pl: ${{ steps.processes.output.p_invk_pl }}
+          bw_p_invk_names: ${{ steps.processes.output.p_invk_names }}
+          bw_p_invk_ops: ${{ steps.processes.output.p_invk_ops }}
           bw_p_act_names: ${{ steps.processes.output.p_act_names }}
           bw_p_calls: ${{ steps.processes.output.p_calls }}
           bw_p_rest_ops: ${{ steps.processes.output.p_rest_ops }}
