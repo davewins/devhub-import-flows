@@ -9,6 +9,9 @@ metadata:
   name: ${{ appId | dump }}
   title: ${{ app | dump }}
   description: ${{ desc | dump }}
+  tibco.developer.hub/topology:
+    theme:
+      name: 'blue'
   tags: ${{ tags | dump }}
   links:
     - title: Repository
@@ -68,6 +71,9 @@ metadata:
   title: ${{ (values.bw_api_title[0] if (loop.first and values.bw_api_title and values.bw_api_title[0]) else apiBase) | dump }}
   description: ${{ (values.bw_api_description[0] if (loop.first and values.bw_api_description and values.bw_api_description[0]) else ("OpenAPI definition " + f + " from the " + app + " BusinessWorks project")) | dump }}
   tags: [openapi, businessworks]
+  tibco.developer.hub/topology:
+    theme:
+      name: 'purple'
   annotations:
     backstage.io/source-location: ${{ ("url:" + blobPre + ((folder + f) | replace(" ", "%20")) + blobSuf) | dump }}
 spec:
@@ -78,15 +84,18 @@ spec:
   definition:
     $text: ${{ (blobPre + ((folder + f) | replace(" ", "%20")) + blobSuf) | dump }}
 {%- endfor %}
-{%- if brokerUrl != "" %}
+{%- if brokerUrl != "" and emitInfra %}
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: ${{ brokerId | dump }}
-  title: TIBCO EMS broker
-  description: ${{ ("Message broker used by " + app + ", taken from the project's deployment configuration.") | dump }}
+  title: ${{ (("TIBCO EMS broker " + brokerHost) if useShared else "TIBCO EMS broker") | dump }}
+  description: ${{ (("Shared TIBCO EMS broker at " + brokerHost + ". Defined by the import of " + app + "; other applications reference it.") if useShared else ("Message broker used by " + app + ", taken from the project's deployment configuration.")) | dump }}
   tags: [tibco-ems, messaging]
+  tibco.developer.hub/topology:
+    theme:
+      name: 'orange'
   annotations:
     tibco.com/ems-url: ${{ brokerUrl | dump }}
 spec:
@@ -103,6 +112,9 @@ metadata:
   title: Database
   description: ${{ ("Database used by " + app + ", taken from the project's deployment configuration.") | dump }}
   tags: [database, jdbc]
+  tibco.developer.hub/topology:
+    theme:
+      name: 'green'
   annotations:
     tibco.com/jdbc-url: ${{ jdbcUrl | dump }}
 spec:
@@ -110,15 +122,18 @@ spec:
   owner: ${{ values.owner | dump }}
   system: ${{ values.system | dump }}
 {%- endif %}
-{%- for q in dests %}
+{%- for q in (dests if emitInfra else []) %}
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: ${{ (lid + "-queue-" + (q.name | lower | replace(" ", "-"))) | dump }}
+  name: ${{ qids[loop.index0] | dump }}
   title: ${{ q.name | dump }}
   description: ${{ (("EMS topic " if q.topic else "EMS queue ") + q.name + ((" (configuration variable " + q["var"] + ")") if q["var"] != "" else " (named in a process)") + ((". Produced by " + (q.producers | join(", "))) if q.producers.length > 0 else "") + ((". Consumed by " + (q.consumers | join(", "))) if q.consumers.length > 0 else "")) | dump }}
   tags: [tibco-ems, ${{ "topic" if q.topic else "queue" }}]
+  tibco.developer.hub/topology:
+    theme:
+      name: 'yellow'
   annotations:
     tibco.com/destination-name: ${{ q.name | dump }}
 {%- if q["var"] != "" %}
@@ -149,6 +164,9 @@ metadata:
   title: ${{ rbase | dump }}
   description: ${{ ("BusinessWorks shared resource (" + rext + ") defined in " + f) | dump }}
   tags: [businessworks, shared-resource]
+  tibco.developer.hub/topology:
+    theme:
+      name: 'pastelGreen'
   annotations:
     backstage.io/source-location: ${{ ("url:" + blobPre + ((folder + f) | replace(" ", "%20")) + blobSuf) | dump }}
     tibco.com/bw-resource-type: ${{ rext | dump }}

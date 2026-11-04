@@ -218,13 +218,36 @@
 {%- if procs.length > 0 and totalCatches == 0 -%}{%- set _ = findings.push({ "level": "Warning", "area": "Reliability", "text": "None of the " + procs.length + " processes defines a fault handler. Errors will be handled only by the engine defaults." }) -%}{%- endif -%}
 {%- if (values.bw_tests or []).length == 0 -%}{%- set _ = findings.push({ "level": "Info", "area": "Testing", "text": "No BusinessWorks test suites were found under a Tests folder." }) -%}{%- endif -%}
 {%- set nWarn = 0 -%}{%- for fnd in findings -%}{%- if fnd.level == "Warning" -%}{%- set nWarn = nWarn + 1 -%}{%- endif -%}{%- endfor -%}
-{%- set brokerId = lid + "-ems-broker" -%}
+{#- infraMode: per-app (default) | shared-define | shared-reference.
+    Shared modes name the broker after its address and queues after broker+destination, so every application
+    using the same EMS broker/queue points at the same catalog entity. A Resource ref can only be defined once
+    in the catalog: use shared-define for the first import and shared-reference for the rest. -#}
+{%- set shared = (values.infraMode == "shared-define" or values.infraMode == "shared-reference") -%}
+{%- set brokerHost = brokerUrl.split(",")[0].split("://") | last -%}
+{%- set useShared = shared and brokerUrl != "" and not (brokerHost.startsWith("localhost") or brokerHost.startsWith("127.")) -%}
+{%- set emitInfra = (not useShared) or values.infraMode == "shared-define" -%}
+{%- set brokerSlug = brokerHost | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+/, "") | replace(r/-+$/, "") -%}
+{%- set brokerId = ("ems-" + brokerSlug) if useShared else (lid + "-ems-broker") -%}
+{%- set qids = [] -%}
+{%- for q in dests -%}
+  {%- set qid = (brokerId + ("-topic-" if q.topic else "-queue-") + (q.name | lower | replace(r/[^a-z0-9._-]+/g, "-"))) if useShared else (lid + "-queue-" + (q.name | lower | replace(" ", "-"))) -%}
+  {%- set _ = qids.push(qid | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}
+{%- endfor -%}
 {%- set dbId = lid + "-database" -%}
 {%- set resRefs = [] -%}
 {%- set apiRefs = [] -%}
-{%- if brokerUrl != "" -%}{%- set _ = resRefs.push("resource:default/" + brokerId) -%}{%- endif -%}
-{%- if jdbcUrl != "" -%}{%- set _ = resRefs.push("resource:default/" + dbId) -%}{%- endif -%}
-{%- for q in dests -%}{%- set _ = resRefs.push("resource:default/" + lid + "-queue-" + (q.name | lower | replace(" ", "-"))) -%}{%- endfor -%}
+{#- The broker/database hang off the queues and connection resources, so link them straight from the application
+    only when nothing else depends on them (avoids redundant edges in the topology view). -#}
+{%- set viaJms = dests.length > 0 -%}
+{%- set viaJdbc = false -%}
+{%- for f in values.bw_resources -%}
+  {%- set fext = (f.split("/") | last).split(".") | last -%}
+  {%- if fext == "jmsConnResource" -%}{%- set viaJms = true -%}{%- endif -%}
+  {%- if fext == "jdbcResource" -%}{%- set viaJdbc = true -%}{%- endif -%}
+{%- endfor -%}
+{%- if brokerUrl != "" and not viaJms -%}{%- set _ = resRefs.push("resource:default/" + brokerId) -%}{%- endif -%}
+{%- if jdbcUrl != "" and not viaJdbc -%}{%- set _ = resRefs.push("resource:default/" + dbId) -%}{%- endif -%}
+{%- for q in dests -%}{%- set _ = resRefs.push("resource:default/" + qids[loop.index0]) -%}{%- endfor -%}
 {%- for f in values.bw_resources -%}{%- set _ = resRefs.push("resource:default/" + lid + "-" + ((f.split("/") | last).split(".")[0] | lower)) -%}{%- endfor -%}
 {%- for f in values.bw_swagger_files -%}{%- set _ = apiRefs.push("api:default/" + lid + "-" + ((f.split("/") | last).split(".")[0] | lower)) -%}{%- endfor -%}
 {%- set tags = ["tibco", "businessworks", ("bwce" if isCE else "bw6")] -%}

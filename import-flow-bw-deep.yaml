@@ -124,6 +124,23 @@ spec:
           type: boolean
           default: false
           description: Tick if the System/Domain do not exist in the catalog yet.
+        infraMode:
+          title: Message broker and queues
+          type: string
+          default: per-app
+          enum:
+            - per-app
+            - shared-define
+            - shared-reference
+          enumNames:
+            - Per application (unique entities for this app)
+            - Shared - define the broker and queues from this import
+            - Shared - reference broker and queues defined by another import
+          description: >-
+            Shared modes name the EMS broker and queues after their address, so several
+            applications link to the same entities and the topology shows who uses each queue.
+            A catalog entity can only be defined once - pick "define" for the first application
+            and "reference" for the rest.
         outputFolder:
           title: Folder for the generated files
           type: string
@@ -373,6 +390,7 @@ spec:
           lifecycle: ${{ parameters.lifecycle }}
           createSystem: ${{ parameters.createSystem }}
           outputFolder: ${{ parameters.outputFolder }}
+          infraMode: ${{ parameters.infraMode }}
           app_dir: ${{ steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "") }}
           module_dir: ${{ steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "") }}
           bw_processes: ${{ steps.discover.output.bw_processes }}
