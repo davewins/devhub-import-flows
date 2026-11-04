@@ -45,6 +45,11 @@ Also:
 - Check the exact options for your Backstage version in the
   [integrations documentation](https://backstage.io/docs/integrations/).
 - For TechDocs generated locally, `mkdocs` and `mkdocs-techdocs-core` must be installed on the host running DevHub.
+- **Optional, only for process diagrams: Graphviz.** The deep flow can draw a diagram of each process (see
+  [Process flow diagrams](#process-flow-diagrams)). The diagrams are rendered when the TechDocs build runs, by the
+  Graphviz `dot` program, so `dot` must be installed **on the machine (or inside the container) that runs
+  `mkdocs`**. It is *not* part of the standard TIBCO Developer Hub image, which only ships `mkdocs` and
+  `mkdocs-techdocs-core`. Leave the "Draw process flow diagrams" option off if you cannot install it.
 
 ## Deep import flow (`import-flow-bw-deep.yaml`)
 
@@ -58,6 +63,7 @@ catalog entries from what is in the project, commits them to the repository and 
 | `Resources/**/*Resource` shared resources | **Resource** per JMS connection, HTTP connector, JDBC connection and so on |
 | `META-INF/default.substvar` (application profile over module defaults) | **Resource** for the EMS broker, the database and each queue/topic variable, with `dependsOn` relations |
 | `Processes/**/*.bwp` | per-process inventory (trigger, activity types, calls to other processes, fault handlers), a **call tree** from each entry point, and "called by" |
+| links between activities in the `.bwp` files | **flow** of each process: a From / To table, and optionally a Graphviz diagram (see below) |
 | JMS activities in the processes | **messaging map**: each queue/topic Resource says which processes produce to it and which consume from it; a destination named only inside a process gets its own Resource |
 | REST bindings in `module.bwm` and the processes | which process implements each REST operation (on the API page) |
 | other palette activities (JDBC, HTTP, SOAP, files ...) | "systems the processes talk to": process, activity, connection resource and the URL/SQL attribute where one exists |
@@ -109,10 +115,68 @@ template ships with github.com, gitlab.com, bitbucket.org and the author's own F
    name in *Other branch*, which overrides the list. Edit the `enum` under `branch` to suit your naming.
 3. Enter owner, system and lifecycle, then run it. The Component, APIs and Resources appear in the catalog.
 
+### Process flow diagrams
+
+The processes page has a **Flow of &lt;process&gt;** section for every process. The From / To table is always
+generated. If you tick **Draw process flow diagrams in the documentation** (`processDiagrams`, off by default) the
+page also gets a diagram, written as a fenced block:
+
+````
+```graphviz dot createorderprocess-flow.svg
+digraph "CreateOrderProcess" { ... }
+```
+````
+
+`mkdocs-techdocs-core` includes the `markdown-graphviz-inline` extension, which runs `dot -Tsvg` while the docs are
+built and embeds the result as an inline image. Nothing is committed and nothing runs in the browser. Nodes are
+coloured by activity type (start green, end orange, calls blue, logging grey, with the activity type under the name).
+
+**Graphviz must be installed where `mkdocs` runs:**
+
+| Where TechDocs is built | Install |
+|---|---|
+| Debian / Ubuntu / WSL host | `sudo apt install graphviz` |
+| Alpine (the standard Developer Hub image is Alpine) | `apk add graphviz`, in a derived image or the Dockerfile |
+| macOS | `brew install graphviz` |
+| `techdocs.generator.runIn: docker` | put Graphviz in the docker image that runs `mkdocs`, not on the host |
+| `techdocs.builder: external` (docs built in CI) | install it on the CI runner |
+
+Check with `dot -V`. If the diagrams come out with cramped or overlapping text, install a font package as well
+(for example `fonts-dejavu-core` on Debian or `ttf-dejavu` on Alpine); the Alpine and font notes have not been tested.
+
+**What happens without it:** the docs build still succeeds, but in place of each diagram the page shows
+`Error : [Errno 2] No such file or directory: 'dot'`, and the From / To table below it is unaffected. That is why the
+option is off by default. Tick it only when your TechDocs host has Graphviz.
+
+The diagram is drawn from the BPEL links in the `.bwp` files (`<sources>` / `<targets>`), so it shows the logical flow
+of the process, not the canvas layout you see in BusinessWorks Studio. Link conditions and fault paths are not drawn,
+and the activities inside a group appear in the same graph as the group, without a box around them.
+
+### Shared broker and queue entities
+
+By default every application gets its own EMS broker and queue entities, named after the application
+(`orderprocessing-ems-broker`, `orderprocessing-queue-orders`). If several applications use the same broker, choose a
+shared mode under **Message broker and queues** (`infraMode`) so they point at the same entities and the topology
+shows which applications use each queue:
+
+| Mode | Behaviour |
+|---|---|
+| `per-app` (default) | Entities named after the application |
+| `shared-define` | The broker is named after its address (`ems-<host>-<port>`) and each queue after the broker and destination; this import **defines** them |
+| `shared-reference` | Same shared names, but this import only **references** them |
+
+A catalog entity can only be defined once, so use `shared-define` for the first application on a broker and
+`shared-reference` for every other one (a reference to an entity that does not exist yet shows as unresolved until
+the defining import is registered). A broker on `localhost` or `127.x` always falls back to per-app names. Entity
+names are limited to 63 characters; longer queue names are truncated. Database Resources are still per application.
+
+The generated entities also carry a `tibco.developer.hub/topology` theme (Component blue, API purple, broker orange,
+queue yellow, database green, shared resource light green) used by the Integration Topology view.
+
 ### Cloud and Kubernetes deployments
 
 The flow is stateless: it needs only the scaffolder actions that ship with Developer Hub, no local tools and
-no persistent storage. When Developer Hub runs in the cloud, supply the git tokens through your secret store as
+no persistent storage (the optional process diagrams need Graphviz on the TechDocs host, see above). When Developer Hub runs in the cloud, supply the git tokens through your secret store as
 the `integrations:` environment variables, and allow outbound HTTPS from the pod to the git hosts.
 
 ### Documentation (TechDocs)
@@ -139,6 +203,8 @@ folder is what the flow uses and is committed).
   attribute names have not been checked against a real project that uses them.
 * Findings are heuristics, not a code review; some will be intentional.
 * The call tree follows *Call Process* activities only (not sub-process inline groups or dynamic calls).
+* Process diagrams show the link graph, not the Studio canvas, need Graphviz on the TechDocs host, and have been
+  checked against one BW 2.10 (`bwcf`) project only.
 * The branch list is static: Backstage's form has no built-in field that lists a repository's real branches
   (that needs a custom scaffolder field extension in the Developer Hub build), hence the *Other branch* override.
 * The first application and first module found are imported. Use the *Application name* field to choose
