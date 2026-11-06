@@ -3,8 +3,8 @@
 
 ## Shared resources
 
-{% for f in values.bw_resources -%}
-{%- set file = f.split("/") | last -%}
+{% for f in values.bw_resources -%}{%- set f = f | replace("\\", "/") -%}
+{%- set file = f.split(r/[\\\/]/) | last -%}
 - **${{ file.split(".")[0] }}** (`${{ file.split(".") | last }}`) in `${{ f }}`
 {% else -%}
 No shared resources found.

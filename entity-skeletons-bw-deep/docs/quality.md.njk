@@ -26,7 +26,7 @@
 {%- endif -%}
 {%- set repoWeb = webBase -%}
 {%- set folder = "" if (values.application_folder == "." or values.application_folder == "") else values.application_folder + "/" -%}
-{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split("/") | last) -%}
+{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split(r/[\\\/]/) | last) -%}
 {#- entity names: letters, digits and - _ . only, at most 63 characters; the prefix used for derived entities is kept short -#}
 {%- set appId = (app | replace(r/[^A-Za-z0-9._-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "") -%}
 {%- set lid = appId | lower | truncate(26, true, "") | replace(r/[-_.]+$/, "") -%}
@@ -61,8 +61,8 @@
 {%- for s in (values.bw_svc_names or []) -%}{%- set _ = svcNames.push(s.split('"')[1]) -%}{%- endfor -%}
 {%- for s in (values.bw_svc_paths or []) -%}{%- set _ = svcPaths.push(s.split('"')[1]) -%}{%- endfor -%}
 {%- set pfull = [] -%}{%- set pshort = [] -%}
-{%- for f in values.bw_processes -%}
-  {%- set pn = (values.bw_p_name[loop.index0][0] if (values.bw_p_name and values.bw_p_name[loop.index0] and values.bw_p_name[loop.index0][0]) else ((f.split("/") | last).replace(".bwp", ""))) -%}
+{%- for f in values.bw_processes -%}{%- set f = f | replace("\\", "/") -%}
+  {%- set pn = (values.bw_p_name[loop.index0][0] if (values.bw_p_name and values.bw_p_name[loop.index0] and values.bw_p_name[loop.index0][0]) else ((f.split(r/[\\\/]/) | last).replace(".bwp", ""))) -%}
   {%- set _ = pfull.push(pn) -%}{%- set _ = pshort.push(pn.split(".") | last) -%}
 {%- endfor -%}
 {#- destinations: configuration variables first, then any destination only named inside an activity -#}
@@ -103,7 +103,7 @@
 {%- set restEps = [] -%}
 {%- set findings = [] -%}
 {%- set totalActs = 0 -%}{%- set totalCatches = 0 -%}{%- set logActs = 0 -%}
-{%- for f in values.bw_processes -%}
+{%- for f in values.bw_processes -%}{%- set f = f | replace("\\", "/") -%}
   {%- set i = loop.index0 -%}
   {%- set pname = pshort[i] -%}
   {%- set types = [] -%}{%- set tnames = [] -%}
@@ -176,7 +176,7 @@
     {%- if rk != "" -%}
       {%- set rloc = (rb.match(r/locationURI="([^"]*)"/) or ["", ""])[1] -%}
       {%- set rsvc = ((rb.match(r/serviceQName="([^"]*)"/) or ["", ""])[1]).split(":") | last -%}
-      {%- set rwsdl = (((rb.match(r/wsdlLocation="([^"]*)"/) or ["", ""])[1]).split("/") | last).replace("%20", " ") -%}
+      {%- set rwsdl = (((rb.match(r/wsdlLocation="([^"]*)"/) or ["", ""])[1]).split(r/[\\\/]/) | last).replace("%20", " ") -%}
       {%- set rpath = (rb.match(r/\spath="([^"]*)"/) or ["", ""])[1] -%}
       {%- set rops = [] -%}
       {%- for om in (rb.match(r/operationName="[^"]*"/g) or []) -%}{%- if om.split('"')[1] not in rops -%}{%- set _ = rops.push(om.split('"')[1]) -%}{%- endif -%}{%- endfor -%}
@@ -231,7 +231,7 @@
     {#- literal values mapped into target-looking fields (host, URI, topic, table...) -#}
     {%- set hints = [] -%}
     {%- for m in maps -%}
-      {%- if m.act == an and m.const and hints.length < 4 and (m.to | lower).match(r/(uri|url|host|port|path|topic|subject|queue|endpoint|file|table|method|resource)/) -%}{%- set _ = hints.push((m.to.split("/") | last) + " = " + m.expr) -%}{%- endif -%}
+      {%- if m.act == an and m.const and hints.length < 4 and (m.to | lower).match(r/(uri|url|host|port|path|topic|subject|queue|endpoint|file|table|method|resource)/) -%}{%- set _ = hints.push((m.to.split(r/[\\\/]/) | last) + " = " + m.expr) -%}{%- endif -%}
     {%- endfor -%}
     {%- set detail = (("destination " + (dname | string)) if (dname | string) != "" else (where if where != "" else "")) -%}
     {%- set _ = ext.push({ "name": an, "type": aty, "conn": conn, "detail": detail, "sql": sql, "kind": kind, "tech": tech, "cat": cat, "hints": hints }) -%}
@@ -499,8 +499,8 @@
 {%- endfor -%}
 {#- WSDL files in Service Descriptors: consumed when an outbound SOAP reference uses them, otherwise provided -#}
 {%- set wsdlConsumed = [] -%}
-{%- for f in (values.bw_wsdl_files or []) -%}
-  {%- set wb = (f.split("/") | last) -%}{%- set wc = [] -%}
+{%- for f in (values.bw_wsdl_files or []) -%}{%- set f = f | replace("\\", "/") -%}
+  {%- set wb = (f.split(r/[\\\/]/) | last) -%}{%- set wc = [] -%}
   {%- for oa in outApis -%}{%- if oa.wsdl == wb -%}{%- set _ = wc.push(1) -%}{%- endif -%}{%- endfor -%}
   {%- set _ = wsdlConsumed.push(wc.length > 0) -%}
 {%- endfor -%}
@@ -511,8 +511,8 @@
 {%- set jd = [] -%}{%- for q in dests -%}{%- if q.tech == "JMS" -%}{%- set _ = jd.push(1) -%}{%- endif -%}{%- endfor -%}
 {%- set viaJms = jd.length > 0 -%}
 {%- set viaJdbc = false -%}
-{%- for f in values.bw_resources -%}
-  {%- set fext = (f.split("/") | last).split(".") | last -%}
+{%- for f in values.bw_resources -%}{%- set f = f | replace("\\", "/") -%}
+  {%- set fext = (f.split(r/[\\\/]/) | last).split(".") | last -%}
   {%- if fext == "jmsConnResource" -%}{%- set viaJms = true -%}{%- endif -%}
   {%- if fext == "jdbcResource" -%}{%- set viaJdbc = true -%}{%- endif -%}
 {%- endfor -%}
@@ -520,9 +520,9 @@
 {%- if jdbcUrl != "" and not viaJdbc -%}{%- set _ = resRefs.push("resource:default/" + dbId) -%}{%- endif -%}
 {%- for q in dests -%}{%- set _ = resRefs.push("resource:default/" + qids[loop.index0]) -%}{%- endfor -%}
 {%- set resNames = [] -%}{%- set apiNames = [] -%}{%- set wsdlNames = [] -%}
-{%- for f in values.bw_resources -%}{%- set _ = resNames.push((lid + "-" + ((f.split("/") | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set _ = resRefs.push("resource:default/" + resNames[loop.index0]) -%}{%- endfor -%}
-{%- for f in values.bw_swagger_files -%}{%- set _ = apiNames.push((lid + "-" + ((f.split("/") | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set _ = apiRefs.push("api:default/" + apiNames[loop.index0]) -%}{%- endfor -%}
-{%- for f in (values.bw_wsdl_files or []) -%}{%- set _ = wsdlNames.push((lid + "-" + ((f.split("/") | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- if not wsdlConsumed[loop.index0] -%}{%- set _ = apiRefs.push("api:default/" + wsdlNames[loop.index0]) -%}{%- elif ("api:default/" + wsdlNames[loop.index0]) not in consumes -%}{%- set _ = consumes.push("api:default/" + wsdlNames[loop.index0]) -%}{%- endif -%}{%- endfor -%}
+{%- for f in values.bw_resources -%}{%- set f = f | replace("\\", "/") -%}{%- set nm0 = ((lid + "-" + ((f.split(r/[\\\/]/) | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = (nm0 | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = ((nm0 | truncate(57, true, "") | replace(r/[-_.]+$/, "")) + "-" + (loop.index0 + 1)) if (nm1 in resNames or nm0.length > 63) else nm1 -%}{%- set _ = resNames.push(nm1) -%}{%- set _ = resRefs.push("resource:default/" + resNames[loop.index0]) -%}{%- endfor -%}
+{%- for f in values.bw_swagger_files -%}{%- set f = f | replace("\\", "/") -%}{%- set nm0 = ((lid + "-" + ((f.split(r/[\\\/]/) | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = (nm0 | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = ((nm0 | truncate(57, true, "") | replace(r/[-_.]+$/, "")) + "-" + (loop.index0 + 1)) if (nm1 in apiNames or nm0.length > 63) else nm1 -%}{%- set _ = apiNames.push(nm1) -%}{%- set _ = apiRefs.push("api:default/" + apiNames[loop.index0]) -%}{%- endfor -%}
+{%- for f in (values.bw_wsdl_files or []) -%}{%- set f = f | replace("\\", "/") -%}{%- set nm0 = ((lid + "-" + ((f.split(r/[\\\/]/) | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = (nm0 | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = ((nm0 | truncate(57, true, "") | replace(r/[-_.]+$/, "")) + "-" + (loop.index0 + 1)) if (nm1 in wsdlNames or nm0.length > 63) else nm1 -%}{%- set _ = wsdlNames.push(nm1) -%}{%- if not wsdlConsumed[loop.index0] -%}{%- set _ = apiRefs.push("api:default/" + wsdlNames[loop.index0]) -%}{%- elif ("api:default/" + wsdlNames[loop.index0]) not in consumes -%}{%- set _ = consumes.push("api:default/" + wsdlNames[loop.index0]) -%}{%- endif -%}{%- endfor -%}
 {%- set tags = ["tibco", "businessworks", ("bwce" if isCE else "bw6")] -%}
 {%- for p in values.bw_palettes -%}
   {%- set t = p.replace("name=bw.", "").replace("name=bw", "") | lower | replace(r/[^a-z0-9+#]+/g, "-") | replace(r/^-+|-+$/g, "") | truncate(63, true, "") -%}
@@ -555,7 +555,7 @@ Nothing to report.
 - Application version: ${{ appver if appver != "" else "n/a" }}
 {% if (values.bw_artifacts or []).length > 0 -%}
 - Build artifacts committed to the repository:
-{% for a in values.bw_artifacts -%}
+{% for a in values.bw_artifacts -%}{%- set a = a | replace("\\", "/") -%}
 ${{ '    ' }}- `${{ a }}`
 {% endfor -%}
 {% else -%}

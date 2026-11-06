@@ -60,7 +60,7 @@ async function extract(inp) {
   const out = {};
   for (const [key, p] of Object.entries(inp.extractParameters)) {
     try {
-      const abs = f => { const a = path.resolve(root, f); if (!a.startsWith(ws)) throw new Error('path escapes workspace: ' + f); if (a.split(path.sep).includes('.git')) throw new Error('.git blocked'); return a; };
+      const abs = f => { if (process.env.WINPATHS) f = f.replace(/\\/g, '/'); const a = path.resolve(root, f); if (!a.startsWith(ws)) throw new Error('path escapes workspace: ' + f); if (a.split(path.sep).includes('.git')) throw new Error('.git blocked'); return a; };
       if (p.type === 'xml') {
         const c = fs.readFileSync(abs(p.filePath), 'utf8');
         if (p.xPath) {   // same as the real action: serialise every selected node
@@ -76,7 +76,7 @@ async function extract(inp) {
         let paths = await glob(p.glob || '**/*', { cwd: dir });
         if (p.onlyName) paths = paths.map(x => x.split('/').at(-1));
         const re = regexOf(p.regex);
-        out[key] = paths.filter(x => x.match(re)).sort();   // sorted here only for stable test output
+        out[key] = paths.filter(x => x.match(re)).sort().map(x => process.env.WINPATHS ? x.replace(/\//g, '\\') : x);   // WINPATHS=1 mimics the Windows Hub (backslashes)   // sorted here only for stable test output
       }
     } catch (e) { console.log(`   [extract] ${key}: ${e.message.split('\n')[0]}`); if (inp.failOnError) throw e; }
   }

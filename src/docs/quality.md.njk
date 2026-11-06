@@ -22,7 +22,7 @@ Nothing to report.
 - Application version: ${{ appver if appver != "" else "n/a" }}
 {% if (values.bw_artifacts or []).length > 0 -%}
 - Build artifacts committed to the repository:
-{% for a in values.bw_artifacts -%}
+{% for a in values.bw_artifacts -%}{%- set a = a | replace("\\", "/") -%}
 ${{ '    ' }}- `${{ a }}`
 {% endfor -%}
 {% else -%}

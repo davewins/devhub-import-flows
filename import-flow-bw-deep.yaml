@@ -233,48 +233,48 @@ spec:
         extractParameters:
           bw_app_name:
             type: xml
-            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/.project" }}
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("\\", "/") | replace("/META-INF/TIBCO.xml", "")) + "/.project" }}
             jsonPath: '$.projectDescription.name'
           bw_app_description:
             type: xml
-            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/.project" }}
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("\\", "/") | replace("/META-INF/TIBCO.xml", "")) + "/.project" }}
             jsonPath: '$.projectDescription.comment'
           bw_app_version:
             type: file
-            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/MANIFEST.MF" }}
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("\\", "/") | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/MANIFEST.MF" }}
             regex:
               regexPattern: 'Bundle-Version: *(\S+)'
           bw_version:
             type: file
-            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/MANIFEST.MF" }}
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("\\", "/") | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/MANIFEST.MF" }}
             regex:
               regexPattern: 'TIBCO-BW-Version: *([^\r\n]+)'
           bw_edition:
             type: file
-            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/MANIFEST.MF" }}
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("\\", "/") | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/MANIFEST.MF" }}
             regex:
               regexPattern: 'TIBCO-BW-Edition: *(\w+)'
           bw_palettes:
             type: file
-            filePath: ${{ (steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "")) + "/META-INF/MANIFEST.MF" }}
+            filePath: ${{ (steps.discover.output.bw_module_files[0] | replace("\\", "/") | replace("/META-INF/module.bwm", "")) + "/META-INF/MANIFEST.MF" }}
             regex:
               regexPattern: 'name=(bw[A-Za-z0-9_.]*)'
               regexFlags: g
           bw_gv_names:
             type: xml
-            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/default.substvar" }}
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("\\", "/") | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/default.substvar" }}
             jsonPath: '$.repository.globalVariables.globalVariable[*].name'
           bw_gv_values:
             type: xml
-            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/default.substvar" }}
+            filePath: ${{ (steps.discover.output.bw_app_files[0] | replace("\\", "/") | replace("/META-INF/TIBCO.xml", "")) + "/META-INF/default.substvar" }}
             jsonPath: '$.repository.globalVariables.globalVariable[*].value'
           bw_mod_gv_names:
             type: xml
-            filePath: ${{ (steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "")) + "/META-INF/default.substvar" }}
+            filePath: ${{ (steps.discover.output.bw_module_files[0] | replace("\\", "/") | replace("/META-INF/module.bwm", "")) + "/META-INF/default.substvar" }}
             jsonPath: '$.repository.globalVariables.globalVariable[*].name'
           bw_mod_gv_values:
             type: xml
-            filePath: ${{ (steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "")) + "/META-INF/default.substvar" }}
+            filePath: ${{ (steps.discover.output.bw_module_files[0] | replace("\\", "/") | replace("/META-INF/module.bwm", "")) + "/META-INF/default.substvar" }}
             jsonPath: '$.repository.globalVariables.globalVariable[*].value'
           bw_api_title:
             type: json
@@ -460,8 +460,8 @@ spec:
           outputFolder: ${{ parameters.outputFolder }}
           infraMode: ${{ parameters.infraMode }}
           processDiagrams: ${{ parameters.processDiagrams }}
-          app_dir: ${{ steps.discover.output.bw_app_files[0] | replace("/META-INF/TIBCO.xml", "") }}
-          module_dir: ${{ steps.discover.output.bw_module_files[0] | replace("/META-INF/module.bwm", "") }}
+          app_dir: ${{ steps.discover.output.bw_app_files[0] | replace("\\", "/") | replace("/META-INF/TIBCO.xml", "") }}
+          module_dir: ${{ steps.discover.output.bw_module_files[0] | replace("\\", "/") | replace("/META-INF/module.bwm", "") }}
           bw_processes: ${{ steps.discover.output.bw_processes }}
           bw_resources: ${{ steps.discover.output.bw_resources }}
           bw_swagger_files: ${{ steps.discover.output.bw_swagger_files }}

@@ -26,7 +26,7 @@ Base path: `${{ values.bw_api_base_path[0] }}`
 {%- endfor %}
 
 Descriptor files:
-{% for f in values.bw_swagger_files %}
+{% for f in values.bw_swagger_files %}{%- set f = f | replace("\\", "/") %}
 - `${{ f }}`
 {%- endfor %}
 {%- endif %}
