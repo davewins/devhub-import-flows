@@ -437,6 +437,33 @@ spec:
             filePath: ${{ each.value }}
             xPath: "/*/*[local-name()='complexType' or local-name()='simpleType']/@name"
 
+    # Diagnostics: logs what this Hub's template engine supports and the shape of the extracted mappings.
+    # Harmless; remove once the engine behaviour is understood.
+    - id: probe-a
+      name: Probe string methods
+      action: debug:log
+      input:
+        message: "${{ 'PROBE A methods: match=' + ('abc'.match is defined) + ' replace=' + ('abc'.replace is defined) + ' split=' + ('abc'.split is defined) + ' search=' + ('abc'.search is defined) + ' matchAll=' + ('abc'.matchAll is defined) + ' startsWith=' + ('abc'.startsWith is defined) + ' indexOf=' + ('abc'.indexOf is defined) }}"
+    - id: probe-b
+      name: Probe regex helpers
+      action: debug:log
+      input:
+        message: "${{ 'PROBE B regex: replace=' + ('abc' | replace(r/b/, 'X')) + ' split=' + ('a-b-c'.split(r/-/) | length) + ' test=' + (r/b/.test is defined) + ' exec=' + (r/b/.exec is defined) }}"
+    - id: probe-c
+      name: Probe extracted mappings
+      action: debug:log
+      input:
+        message: "${{ 'PROBE C binds: processes=' + (steps.processes.output.p_binds | length) + ' first=' + (steps.processes.output.p_binds[0] | length) + ' isString=' + (steps.processes.output.p_binds[0][0] is string) + ' isArray=' + (steps.processes.output.p_binds[0] is iterable) + ' len0=' + (steps.processes.output.p_binds[0][0] | length) + ' sample=' + (steps.processes.output.p_binds[0][0] | dump | truncate(160, true, '...')) }}"
+    - id: probe-d
+      name: Probe a real binding
+      action: debug:log
+      input:
+        message: "${{ 'PROBE D binding: matchDefined=' + (steps.processes.output.p_binds[0][0].match is defined) + ' replaceDefined=' + (steps.processes.output.p_binds[0][0].replace is defined) + ' typeofLen=' + ((steps.processes.output.p_binds[0][0] | string) | length) }}"
+    - id: probe-e
+      name: Probe calling match
+      action: debug:log
+      input:
+        message: "${{ 'PROBE E call: ' + ('abc'.match(r/b/) | dump) }}"
     - id: generate
       name: Generate Catalog Entities and Docs
       action: fetch:template
