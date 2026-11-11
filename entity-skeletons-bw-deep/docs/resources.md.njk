@@ -38,10 +38,10 @@
 {%- set vars = [] -%}
 {%- set seen = [] -%}
 {%- for n in values.bw_gv_names -%}
-  {%- if not n.startsWith("//") and not n.startsWith("BW.") and n not in seen -%}{%- set _ = seen.push(n) -%}{%- set _ = vars.push({ "n": n, "v": values.bw_gv_values[loop.index0] }) -%}{%- endif -%}
+  {%- if not (n != "" and n.split("//")[0] == "") and not (n != "" and n.split("BW.")[0] == "") and n not in seen -%}{%- set _ = seen.push(n) -%}{%- set _ = vars.push({ "n": n, "v": values.bw_gv_values[loop.index0] }) -%}{%- endif -%}
 {%- endfor -%}
 {%- for n in values.bw_mod_gv_names -%}
-  {%- if not n.startsWith("//") and not n.startsWith("BW.") and n not in seen -%}{%- set _ = seen.push(n) -%}{%- set _ = vars.push({ "n": n, "v": values.bw_mod_gv_values[loop.index0] }) -%}{%- endif -%}
+  {%- if not (n != "" and n.split("//")[0] == "") and not (n != "" and n.split("BW.")[0] == "") and n not in seen -%}{%- set _ = seen.push(n) -%}{%- set _ = vars.push({ "n": n, "v": values.bw_mod_gv_values[loop.index0] }) -%}{%- endif -%}
 {%- endfor -%}
 {%- set brokerUrl = "" -%}
 {%- set jdbcUrl = "" -%}
@@ -49,9 +49,9 @@
 {%- for x in vars -%}
   {%- set n = x.n -%}{%- set v = x.v -%}
   {%- if v is string and v != "" -%}
-    {%- if brokerUrl == "" and (v.startsWith("tcp://") or v.startsWith("ssl://")) -%}{%- set brokerUrl = v -%}{%- endif -%}
-    {%- if jdbcUrl == "" and v.startsWith("jdbc:") -%}{%- set jdbcUrl = v.split("?")[0] -%}{%- endif -%}
-    {%- if (n | lower).endsWith("queue") or (n | lower).endsWith("topic") -%}{%- set _ = queues.push({ "var": n, "name": v, "topic": (n | lower).endsWith("topic"), "tech": "JMS" }) -%}{%- endif -%}
+    {%- if brokerUrl == "" and ((v != "" and v.split("tcp://")[0] == "") or (v != "" and v.split("ssl://")[0] == "")) -%}{%- set brokerUrl = v -%}{%- endif -%}
+    {%- if jdbcUrl == "" and (v != "" and v.split("jdbc:")[0] == "") -%}{%- set jdbcUrl = v.split("?")[0] -%}{%- endif -%}
+    {%- if ((n | lower) != "" and ((n | lower).split("queue") | last) == "") or ((n | lower) != "" and ((n | lower).split("topic") | last) == "") -%}{%- set _ = queues.push({ "var": n, "name": v, "topic": ((n | lower) != "" and ((n | lower).split("topic") | last) == ""), "tech": "JMS" }) -%}{%- endif -%}
   {%- endif -%}
 {%- endfor -%}
 {#- ===== process analysis (everything below is derived from the .bwp / module.bwm / schema files) ===== -#}
@@ -113,7 +113,7 @@
     {%- set k = typeNames.indexOf(ty) -%}
     {%- if k < 0 -%}{%- set _ = typeNames.push(ty) -%}{%- set _ = typeCounts.push(1) -%}{%- else -%}{%- set _ = typeCounts.splice(k, 1, typeCounts[k] + 1) -%}{%- endif -%}
     {%- set totalActs = totalActs + 1 -%}
-    {%- if ty.endsWith(".log") -%}{%- set logActs = logActs + 1 -%}{%- endif -%}
+    {%- if (ty != "" and (ty.split(".log") | last) == "") -%}{%- set logActs = logActs + 1 -%}{%- endif -%}
   {%- endfor -%}
   {%- set calls = [] -%}
   {%- for c in ((values.bw_p_calls[i] if values.bw_p_calls else []) or []) -%}{%- set cn = (c.split('"')[1].split(".")) | last -%}{%- if cn not in calls -%}{%- set _ = calls.push(cn) -%}{%- endif -%}{%- endfor -%}
@@ -201,7 +201,7 @@
     {%- set aty = ((a.split(' activityTypeID="')[1] or "").split('"')[0]) -%}
     {%- set atl = aty | lower -%}
     {%- set rgi = [] -%}
-    {%- for rr in reg -%}{%- if rgi.length == 0 and atl.startsWith(rr.p | lower) -%}{%- set _ = rgi.push(rr) -%}{%- endif -%}{%- endfor -%}
+    {%- for rr in reg -%}{%- if rgi.length == 0 and (atl != "" and atl.split(rr.p | lower)[0] == "") -%}{%- set _ = rgi.push(rr) -%}{%- endif -%}{%- endfor -%}
     {%- set tech = (rgi[0].tech if rgi.length > 0 else "") -%}
     {%- set cat = (rgi[0].cat if rgi.length > 0 else "") -%}
     {%- set attrsRe = ((rgi[0].attrs if (rgi.length > 0 and rgi[0].attrs != "") else "destinationName")) -%}
@@ -251,7 +251,7 @@
     {%- set _ = ext.push({ "name": an, "type": aty, "conn": conn, "detail": detail, "sql": sql, "kind": kind, "tech": tech, "cat": cat, "hints": hints }) -%}
     {%- set _ = extActs.push({ "proc": pname, "name": an, "type": aty, "conn": conn, "detail": detail, "sql": sql, "kind": kind, "tech": tech, "cat": cat, "hints": hints }) -%}
     {#- an HTTP client resource is an outbound API of its own -#}
-    {%- if tech == "HTTP" and conn != "" and atl.endsWith("sendhttprequest") -%}
+    {%- if tech == "HTTP" and conn != "" and (atl != "" and (atl.split("sendhttprequest") | last) == "") -%}
       {%- set akey = "http:" + conn -%}
       {%- set ai = outKeys.indexOf(akey) -%}
       {%- set hj = (hints | join(" ")) -%}{%- set hjv = hj.replace(r/^[\s\S]*?(?:RequestURI|URL|URI|Host) = "([^"]*)"[\s\S]*$/, "$1") -%}
@@ -317,10 +317,7 @@
             {%- set fa = srcn[si].split('"')[1] -%}{%- set ta = tgtn[ti].split('"')[1] -%}
             {%- set lti = lnames.indexOf(lname) -%}
             {%- set lt = (ltyp[lti] if lti >= 0 else "SUCCESS") -%}
-            {%- set cpos = sx.indexOf('linkName="' + lname + '"') -%}
-            {%- set crest = sx.substring(cpos + 12 + lname.length) -%}
-            {%- set cnxt = crest.indexOf('linkName="') -%}
-            {%- set cseg = (crest.substring(0, cnxt) if cnxt >= 0 else crest) -%}
+            {%- set cseg = ((sx.split('linkName="' + lname + '"')[1] or "").split('linkName="')[0]) -%}
             {%- set cp1 = (cseg.split("transitionCondition")[1] or "") -%}
             {%- set cond1 = (cp1.replace(r/^[^>]*>/, "").replace(r/^<!\[CDATA\[/, "").split("]")[0].split("<")[0] | trim) if cp1 != "" else "" -%}
             {%- set _ = edges.push({ "from": fa, "to": ta, "lt": lt, "cond": cond1 }) -%}
@@ -388,7 +385,8 @@
     {%- if stack.length > 0 -%}
       {%- set cur = stack.pop() -%}
       {%- set cp = procs[cur.i] -%}
-      {%- set _ = treeLines.push("    ".repeat(cur.d) + "- **" + cp.name + "**" + ((" (" + trigText[cur.i] + ")") if cur.d == 0 else "")) -%}
+      {%- set ind = [""] -%}{%- for k in range(cur.d) -%}{%- set _ = ind.splice(0, 1, ind[0] + "    ") -%}{%- endfor -%}
+      {%- set _ = treeLines.push(ind[0] + "- **" + cp.name + "**" + ((" (" + trigText[cur.i] + ")") if cur.d == 0 else "")) -%}
       {%- if cur.d < 6 -%}
         {%- set kids = [] -%}
         {%- for c in cp.calls -%}{%- set ci = pshort.indexOf(c) -%}{%- if ci >= 0 -%}{%- set _ = kids.unshift({ "i": ci, "d": cur.d + 1 }) -%}{%- endif -%}{%- endfor -%}
@@ -405,16 +403,16 @@
 {%- for x in vars -%}
   {%- set n = x.n -%}{%- set v = x.v -%}{%- set ln = n | lower -%}
   {%- if v is string and v != "" -%}
-    {%- if v.startsWith("#!") -%}{%- set nObf = nObf + 1 -%}
-    {%- elif v.startsWith("%%") -%}
+    {%- if (v != "" and v.split("#!")[0] == "") -%}{%- set nObf = nObf + 1 -%}
+    {%- elif (v != "" and v.split("%%")[0] == "") -%}
     {%- else -%}
       {%- if v.replace(r/(^|[^0-9.])((10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})([^0-9]|$)/, "") != v -%}
         {%- set _ = findings.push({ "level": "Warning", "area": "Configuration", "text": "`" + n + "` holds a hardcoded private IP address. Prefer a host name or an environment-specific value." }) -%}
       {%- endif -%}
-      {%- if v.startsWith("http://") and not ("localhost" in v) -%}
+      {%- if (v != "" and v.split("http://")[0] == "") and not ("localhost" in v) -%}
         {%- set _ = findings.push({ "level": "Info", "area": "Configuration", "text": "`" + n + "` is an unencrypted http:// URL." }) -%}
       {%- endif -%}
-      {%- if ("localhost" in v) or v.startsWith("127.") -%}
+      {%- if ("localhost" in v) or (v != "" and v.split("127.")[0] == "") -%}
         {%- set _ = findings.push({ "level": "Info", "area": "Configuration", "text": "`" + n + "` points at localhost, which will not work once deployed." }) -%}
       {%- endif -%}
       {%- if ("pass" in ln) or ("secret" in ln) or ("token" in ln) or ("credential" in ln) -%}
@@ -427,7 +425,7 @@
 {%- set sleepish = [] -%}
 {%- for p in procs -%}
   {%- for ty in p.types -%}
-    {%- if ty.endsWith(".sleep") and p.tnames[loop.index0] and (p.tnames[loop.index0].replace(r/(database|db|query|insert|update|select|call|service|api|http|send|lookup)/i, "") != p.tnames[loop.index0]) -%}
+    {%- if (ty != "" and (ty.split(".sleep") | last) == "") and p.tnames[loop.index0] and (p.tnames[loop.index0].replace(r/(database|db|query|insert|update|select|call|service|api|http|send|lookup)/i, "") != p.tnames[loop.index0]) -%}
       {%- set _ = sleepish.push(p.name + "." + p.tnames[loop.index0]) -%}
     {%- endif -%}
   {%- endfor -%}
@@ -458,7 +456,7 @@
     in the catalog: use shared-define for the first import and shared-reference for the rest. -#}
 {%- set shared = (values.infraMode == "shared-define" or values.infraMode == "shared-reference") -%}
 {%- set brokerHost = brokerUrl.split(",")[0].split("://") | last -%}
-{%- set useShared = shared and brokerUrl != "" and not (brokerHost.startsWith("localhost") or brokerHost.startsWith("127.")) -%}
+{%- set useShared = shared and brokerUrl != "" and not ((brokerHost != "" and brokerHost.split("localhost")[0] == "") or (brokerHost != "" and brokerHost.split("127.")[0] == "")) -%}
 {%- set emitInfra = (not useShared) or values.infraMode == "shared-define" -%}
 {%- set brokerSlug = brokerHost | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+/, "") | replace(r/-+$/, "") -%}
 {%- set brokerId = ("ems-" + brokerSlug) if useShared else (lid + "-ems-broker") -%}
@@ -468,10 +466,10 @@
   {%- if q.tech != "JMS" and q.tech not in tkTech -%}
     {%- set hintRe = [] -%}{%- for rr in reg -%}{%- if rr.tech == q.tech and rr.hint != "" -%}{%- set _ = hintRe.push(rr.hint) -%}{%- endif -%}{%- endfor -%}
     {%- set urlh = [] -%}
-    {%- if hintRe.length > 0 -%}{%- for x in vars -%}{%- if urlh.length == 0 and x.v is string and x.v != "" and not x.v.startsWith("#!") -%}{%- set xl = (x.n | lower) -%}{%- for hn in hintRe[0].split("|") -%}{%- if urlh.length == 0 and hn in xl -%}{%- set _ = urlh.push(x.v) -%}{%- endif -%}{%- endfor -%}{%- endif -%}{%- endfor -%}{%- endif -%}
+    {%- if hintRe.length > 0 -%}{%- for x in vars -%}{%- if urlh.length == 0 and x.v is string and x.v != "" and not (x.v != "" and x.v.split("#!")[0] == "") -%}{%- set xl = (x.n | lower) -%}{%- for hn in hintRe[0].split("|") -%}{%- if urlh.length == 0 and hn in xl -%}{%- set _ = urlh.push(x.v) -%}{%- endif -%}{%- endfor -%}{%- endif -%}{%- endfor -%}{%- endif -%}
     {%- set url = (urlh[0] if urlh.length > 0 else "") -%}
     {%- set tslug = q.tech | lower | replace(r/[^a-z0-9]+/g, "-") -%}
-    {%- set shareK = shared and url != "" and not ("localhost" in url) and not url.startsWith("127.") -%}
+    {%- set shareK = shared and url != "" and not ("localhost" in url) and not (url != "" and url.split("127.")[0] == "") -%}
     {%- set uslug = url.split(",")[0].split("://") | last | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+|-+$/g, "") -%}
     {%- set _ = tkTech.push(q.tech) -%}{%- set _ = tkUrl.push(url) -%}{%- set _ = tkSlug.push(tslug) -%}
     {%- set _ = tkId.push((((tslug + "-" + uslug) if shareK else (lid + "-" + tslug + "-cluster")) | truncate(63, true, "") | replace(r/[-_.]+$/, ""))) -%}
@@ -481,7 +479,7 @@
 {%- set qids = [] -%}{%- set qEmit = [] -%}{%- set qBroker = [] -%}
 {%- for q in dests -%}
   {%- set tk = tkTech.indexOf(q.tech) -%}
-  {%- set tkShared = (tk >= 0 and tkUrl[tk] != "" and shared and tkId[tk].startsWith(tkSlug[tk] + "-") and not tkId[tk].startsWith(lid + "-")) -%}
+  {%- set tkShared = (tk >= 0 and tkUrl[tk] != "" and shared and (tkId[tk] != "" and tkId[tk].split(tkSlug[tk] + "-")[0] == "") and not (tkId[tk] != "" and tkId[tk].split(lid + "-")[0] == "")) -%}
   {%- if q.tech == "JMS" -%}
     {%- set qid = (brokerId + ("-topic-" if q.topic else "-queue-") + (q.name | lower | replace(r/[^a-z0-9._-]+/g, "-"))) if useShared else (lid + "-queue-" + (q.name | lower | replace(" ", "-"))) -%}
     {%- set _ = qEmit.push(emitInfra) -%}{%- set _ = qBroker.push(brokerId if brokerUrl != "" else "") -%}
@@ -571,7 +569,7 @@ out on purpose.
 {%- set n = x.n -%}{%- set v = x.v -%}
 {%- set ln = n | lower -%}
 {%- if not ("pass" in ln) and not ("secret" in ln) and not ("token" in ln) and not ("credential" in ln) and not ("key" in ln) -%}
-{%- if not (v is string and (v.startsWith("#!") or v.startsWith("%%"))) -%}
+{%- if not (v is string and ((v != "" and v.split("#!")[0] == "") or (v != "" and v.split("%%")[0] == ""))) -%}
 | `${{ n }}` | ${{ ("`" + (v | string) + "`") if (v | string) != "" else "_(empty)_" }} |
 {% endif -%}
 {%- endif -%}

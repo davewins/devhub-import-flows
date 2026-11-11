@@ -26,7 +26,7 @@ reply of a process. The source is the activity or process input the value comes 
 {%- set ti = enames.indexOf(m.act) -%}
 {%- set tact = p.tnames.indexOf(m.act) -%}
 {%- set tty = ((p.types[tact] | lower) if tact >= 0 else "") -%}
-{%- set isOut = tty.endsWith(".reply") or tty.endsWith(".end") -%}
+{%- set isOut = (tty != "" and (tty.split(".reply") | last) == "") or (tty != "" and (tty.split(".end") | last) == "") -%}
 {%- if (ti >= 0 and p.ext[ti].tech != "") or isOut -%}
 {%- if shown[0] < 250 -%}
 {%- set src = [] -%}

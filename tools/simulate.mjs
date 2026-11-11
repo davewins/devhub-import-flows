@@ -19,6 +19,19 @@ if (!projectDir || !paramsFile) { console.error('usage: node simulate.mjs <bw-pr
 const params = JSON.parse(fs.readFileSync(paramsFile, 'utf8'));
 const tpl = yaml.parse(fs.readFileSync(path.join(templateDir, 'import-flow-bw-deep.yaml'), 'utf8'));
 
+
+// STRICT=1 emulates what newer Hub builds appear to allow on strings in templates: only replace / split / length.
+// Any other member access on a string throws, so the offline run fails where the Hub would.
+if (process.env.STRICT) {
+  const rt = (await import('nunjucks/src/runtime.js')).default;
+  const orig = rt.memberLookup;
+  const ok = new Set(['replace', 'split', 'length']);
+  rt.memberLookup = function (obj, val) {
+    if (typeof obj === 'string' && typeof val === 'string' && !(/^\d+$/.test(val)) && !ok.has(val)) throw new Error('STRICT: string member "' + val + '" is not available (' + JSON.stringify(obj.slice(0, 40)) + ')');
+    return orig.apply(this, arguments);
+  };
+}
+
 const parseRepoUrl = s => {
   const u = new URL('https://' + s);
   const g = k => u.searchParams.get(k) || undefined;

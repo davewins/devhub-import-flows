@@ -22,7 +22,7 @@ out on purpose.
 {%- set n = x.n -%}{%- set v = x.v -%}
 {%- set ln = n | lower -%}
 {%- if not ("pass" in ln) and not ("secret" in ln) and not ("token" in ln) and not ("credential" in ln) and not ("key" in ln) -%}
-{%- if not (v is string and (v.startsWith("#!") or v.startsWith("%%"))) -%}
+{%- if not (v is string and ((v != "" and v.split("#!")[0] == "") or (v != "" and v.split("%%")[0] == ""))) -%}
 | `${{ n }}` | ${{ ("`" + (v | string) + "`") if (v | string) != "" else "_(empty)_" }} |
 {% endif -%}
 {%- endif -%}
