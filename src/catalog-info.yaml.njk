@@ -65,7 +65,7 @@ spec:
   dependsOn: ${{ resRefs | dump }}
 {%- endif %}
 {%- for f in values.bw_swagger_files %}{%- set f = f | replace("\\", "/") %}
-{%- set apiBase = (f.split(r/[\\\/]/) | last).replace(r/\.[^.]*$/, "") %}
+{%- set apiBase = (f.split("/") | last).replace(r/\.[^.]*$/, "") %}
 ---
 apiVersion: backstage.io/v1alpha1
 kind: API
@@ -93,7 +93,7 @@ apiVersion: backstage.io/v1alpha1
 kind: API
 metadata:
   name: ${{ wsdlNames[loop.index0] | dump }}
-  title: ${{ ((f.split(r/[\\\/]/) | last).replace(r/\.[^.]*$/, "")) | dump }}
+  title: ${{ ((f.split("/") | last).replace(r/\.[^.]*$/, "")) | dump }}
   description: ${{ (("WSDL consumed by " if wsdlConsumed[loop.index0] else "WSDL provided by ") + app + ": " + f) | dump }}
   tags: [soap, wsdl, businessworks]
   tibco.developer.hub/topology:
@@ -239,8 +239,8 @@ spec:
 {%- endif %}
 {%- endfor %}
 {%- for f in values.bw_resources %}{%- set f = f | replace("\\", "/") %}
-{%- set rbase = (f.split(r/[\\\/]/) | last).replace(r/\.[^.]*$/, "") %}
-{%- set rext = (f.split(r/[\\\/]/) | last).split(".") | last %}
+{%- set rbase = (f.split("/") | last).replace(r/\.[^.]*$/, "") %}
+{%- set rext = (f.split("/") | last).split(".") | last %}
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource

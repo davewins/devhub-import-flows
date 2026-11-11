@@ -26,7 +26,7 @@
 {%- endif -%}
 {%- set repoWeb = webBase -%}
 {%- set folder = "" if (values.application_folder == "." or values.application_folder == "") else values.application_folder + "/" -%}
-{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split(r/[\\\/]/) | last) -%}
+{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split("/") | last) -%}
 {#- entity names: letters, digits and - _ . only, at most 63 characters; the prefix used for derived entities is kept short -#}
 {%- set appId = (app | replace(r/[^A-Za-z0-9._-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "") -%}
 {%- set lid = appId | lower | truncate(26, true, "") | replace(r/[-_.]+$/, "") -%}
@@ -62,7 +62,7 @@
 {%- for s in (values.bw_svc_paths or []) -%}{%- set _ = svcPaths.push(s.split('"')[1]) -%}{%- endfor -%}
 {%- set pfull = [] -%}{%- set pshort = [] -%}
 {%- for f in values.bw_processes -%}{%- set f = f | replace("\\", "/") -%}
-  {%- set pn = (values.bw_p_name[loop.index0][0] if (values.bw_p_name and values.bw_p_name[loop.index0] and values.bw_p_name[loop.index0][0]) else ((f.split(r/[\\\/]/) | last).replace(".bwp", ""))) -%}
+  {%- set pn = (values.bw_p_name[loop.index0][0] if (values.bw_p_name and values.bw_p_name[loop.index0] and values.bw_p_name[loop.index0][0]) else ((f.split("/") | last).replace(".bwp", ""))) -%}
   {%- set _ = pfull.push(pn) -%}{%- set _ = pshort.push(pn.split(".") | last) -%}
 {%- endfor -%}
 {#- destinations: configuration variables first, then any destination only named inside an activity -#}
@@ -131,39 +131,46 @@
     {%- set xs = xs.replace(r/&lt;/g, "<").replace(r/&gt;/g, ">").replace(r/&quot;/g, '"').replace(r/&apos;/g, "'").replace(r/&#xa;|&#10;|&#xd;/g, " ").replace(r/&amp;/g, "&") -%}
     {%- set xs = ([xs] | join("")) -%}
     {%- set path = [] -%}{%- set stk = [] -%}{%- set ctx = [] -%}
-    {%- for tk in (xs.match(r/<(?:[^>"']|"[^"]*"|'[^']*')*>|[^<]+/g) or []) -%}
-      {%- if tk.startsWith("</") -%}
+    {#- tokenise without String.match (not available on newer Hubs): wrap each tag in a sentinel, then split on it -#}
+    {%- for tk in xs.replace(r/(<(?:[^>"']|"[^"]*"|'[^']*')*>)/g, "‡$1‡").split("‡") -%}
+      {%- if tk != "" -%}
+      {%- set isTag = (tk.replace(r/^<[\s\S]*$/, "") == "") -%}
+      {%- if isTag and (tk.replace(r/^<\/[\s\S]*$/, "") == "") -%}
         {%- if stk.length > 0 -%}{%- set fl = stk.pop() -%}{%- if fl == 1 -%}{%- set _ = path.pop() -%}{%- elif fl == 2 -%}{%- set _ = ctx.pop() -%}{%- endif -%}{%- endif -%}
-      {%- elif tk.startsWith("<?") or tk.startsWith("<!") -%}
-      {%- elif tk.startsWith("<") -%}
-        {%- set tn = (tk.match(r/^<([^\s\/>]+)/) or ["", ""])[1] -%}
-        {%- set selfc = tk.endsWith("/>") -%}
+      {%- elif isTag and (tk.replace(r/^<[?!][\s\S]*$/, "") == "") -%}
+      {%- elif isTag -%}
+        {%- set tn = tk.replace(r/^<([^\s\/>]+)[\s\S]*$/, "$1") -%}
+        {%- set selfc = (tk.replace(r/\/>$/, "") != tk) -%}
         {%- set flag = 0 -%}
-        {%- if tn.startsWith("xsl:") -%}
-          {%- set sel = (tk.match(r/(?:select|test)="([^"]*)"/) or ["", ""])[1].replace(r/&lt;/g, "<").replace(r/&gt;/g, ">").replace(r/&quot;/g, '"').replace(r/&apos;/g, "'").replace(r/&amp;/g, "&") -%}
+        {%- if tn.replace(r/^xsl:/, "") != tn -%}
+          {%- set sel0 = tk.replace(r/^[\s\S]*?\s(?:select|test)="([^"]*)"[\s\S]*$/, "$1") -%}
+          {%- set sel = ("" if sel0 == tk else sel0).replace(r/&lt;/g, "<").replace(r/&gt;/g, ">").replace(r/&quot;/g, '"').replace(r/&apos;/g, "'").replace(r/&amp;/g, "&") -%}
           {%- if tn == "xsl:value-of" or tn == "xsl:copy-of" -%}
             {%- set to = (path.slice(1).join("/") if path.length > 1 else (path[0] if path.length == 1 else "")) -%}
-            {%- set vm = sel.match(r/\$[A-Za-z_][A-Za-z0-9_.\-]*/g) or [] -%}
             {%- set vs = [] -%}
-            {%- for v in vm -%}{%- if v.substring(1).split(".")[0] not in vs and (pvn.length == 0 or v.substring(1).split(".")[0] in pvn) -%}{%- set _ = vs.push(v.substring(1).split(".")[0]) -%}{%- endif -%}{%- endfor -%}
-            {%- set pm = sel.match(r/(?:getModuleProperty|getGlobalVariable)\(\s*["'][^"']+["']/g) or [] -%}
+            {%- for vv in sel.replace(r/\$([A-Za-z_][A-Za-z0-9_.\-]*)/g, "‡$1‡").split("‡") -%}
+              {%- if loop.index0 % 2 == 1 -%}{%- set vn = vv.split(".")[0] -%}{%- if vn not in vs and (pvn.length == 0 or vn in pvn) -%}{%- set _ = vs.push(vn) -%}{%- endif -%}{%- endif -%}
+            {%- endfor -%}
             {%- set ps = [] -%}
-            {%- for v in pm -%}{%- set _ = ps.push(v.match(r/["']([^"']+)["']/)[1]) -%}{%- endfor -%}
-            {%- set _ = maps.push({ "act": bact, "to": to, "expr": sel, "ctx": ctx.join(" > "), "vars": vs, "props": ps, "const": (vs.length == 0 and ps.length == 0 and (sel.match(r/^\s*("[^"]*"|'[^']*'|-?[0-9.]+)\s*$/) != null)) }) -%}
+            {%- for pv in sel.replace(r/(?:getModuleProperty|getGlobalVariable)\(\s*["']([^"']+)["']/g, "‡$1‡").split("‡") -%}
+              {%- if loop.index0 % 2 == 1 -%}{%- set _ = ps.push(pv) -%}{%- endif -%}
+            {%- endfor -%}
+            {%- set _ = maps.push({ "act": bact, "to": to, "expr": sel, "ctx": ctx.join(" > "), "vars": vs, "props": ps, "const": (sel != "" and vs.length == 0 and ps.length == 0 and (sel.replace(r/^\s*("[^"]*"|'[^']*'|-?[0-9.]+)\s*$/, "") == "")) }) -%}
           {%- elif tn == "xsl:for-each" and not selfc -%}{%- set flag = 2 -%}{%- set _ = ctx.push("for each " + sel) -%}
           {%- elif (tn == "xsl:if" or tn == "xsl:when") and not selfc -%}{%- set flag = 2 -%}{%- set _ = ctx.push("when " + sel) -%}
           {%- elif tn == "xsl:otherwise" and not selfc -%}{%- set flag = 2 -%}{%- set _ = ctx.push("otherwise") -%}
-          {%- elif tn == "xsl:attribute" and not selfc -%}{%- set flag = 1 -%}{%- set _ = path.push("@" + ((tk.match(r/name="([^"]*)"/) or ["", ""])[1])) -%}
+          {%- elif tn == "xsl:attribute" and not selfc -%}{%- set flag = 1 -%}{%- set an0 = tk.replace(r/^[\s\S]*?\sname="([^"]*)"[\s\S]*$/, "$1") -%}{%- set _ = path.push("@" + ("" if an0 == tk else an0)) -%}
           {%- endif -%}
         {%- elif not selfc -%}
           {%- set flag = 1 -%}{%- set _ = path.push(tn.split(":") | last) -%}
         {%- endif -%}
         {%- if not selfc -%}{%- set _ = stk.push(flag) -%}{%- endif -%}
       {%- else -%}
-        {%- set tx = tk.trim().replace(r/&lt;/g, "<").replace(r/&gt;/g, ">").replace(r/&quot;/g, '"').replace(r/&amp;/g, "&") -%}
+        {%- set tx = (tk | trim).replace(r/&lt;/g, "<").replace(r/&gt;/g, ">").replace(r/&quot;/g, '"').replace(r/&apos;/g, "'").replace(r/&amp;/g, "&") -%}
         {%- if tx != "" and path.length > 1 -%}
           {%- set _ = maps.push({ "act": bact, "to": path.slice(1).join("/"), "expr": '"' + tx + '"', "ctx": ctx.join(" > "), "vars": [], "props": [], "const": true }) -%}
         {%- endif -%}
+      {%- endif -%}
       {%- endif -%}
     {%- endfor -%}
   {%- endfor -%}
@@ -176,14 +183,14 @@
   {%- for rb in rbs -%}
     {%- set rk = ("SOAP" if ("SOAPReferenceBinding" in rb) else ("REST" if ("RestReferenceBinding" in rb) else "")) -%}
     {%- if rk != "" -%}
-      {%- set rloc = (rb.match(r/locationURI="([^"]*)"/) or ["", ""])[1] -%}
-      {%- set rsvc = ((rb.match(r/serviceQName="([^"]*)"/) or ["", ""])[1]).split(":") | last -%}
-      {%- set rwsdl = (((rb.match(r/wsdlLocation="([^"]*)"/) or ["", ""])[1]).split(r/[\\\/]/) | last).replace("%20", " ") -%}
-      {%- set rpath = (rb.match(r/\spath="([^"]*)"/) or ["", ""])[1] -%}
+      {%- set rloc = ((rb.split(' locationURI="')[1] or "").split('"')[0]) -%}
+      {%- set rsvc = ((rb.split(' serviceQName="')[1] or "").split('"')[0]).split(":") | last -%}
+      {%- set rwsdl = (((((rb.split(' wsdlLocation="')[1] or "").split('"')[0]) | replace("\\", "/")).split("/") | last)).replace("%20", " ") -%}
+      {%- set rpath = ((rb.split(' path="')[1] or "").split('"')[0]) -%}
       {%- set rops = [] -%}
-      {%- for om in (rb.match(r/operationName="[^"]*"/g) or []) -%}{%- if om.split('"')[1] not in rops -%}{%- set _ = rops.push(om.split('"')[1]) -%}{%- endif -%}{%- endfor -%}
+      {%- for om in rb.split(' operationName="') -%}{%- if loop.index0 > 0 -%}{%- set ov = om.split('"')[0] -%}{%- if ov not in rops -%}{%- set _ = rops.push(ov) -%}{%- endif -%}{%- endif -%}{%- endfor -%}
       {%- set rmeth = [] -%}
-      {%- for om in (rb.match(r/httpMethod="[^"]*"/g) or []) -%}{%- if om.split('"')[1] not in rmeth -%}{%- set _ = rmeth.push(om.split('"')[1]) -%}{%- endif -%}{%- endfor -%}
+      {%- for om in rb.split(' httpMethod="') -%}{%- if loop.index0 > 0 -%}{%- set ov = om.split('"')[0] -%}{%- if ov not in rmeth -%}{%- set _ = rmeth.push(ov) -%}{%- endif -%}{%- endif -%}{%- endfor -%}
       {%- set _ = prefs.push({ "pl": rbn[loop.index0].split('"')[1], "kind": rk, "loc": rloc, "svc": rsvc, "wsdl": rwsdl, "path": rpath, "ops": rops, "meth": rmeth }) -%}
     {%- endif -%}
   {%- endfor -%}
@@ -191,20 +198,25 @@
   {%- set jmsIn = [] -%}{%- set jmsOut = [] -%}{%- set ext = [] -%}
   {%- for a0 in ((values.bw_p_acts[i] if values.bw_p_acts else []) or []) -%}{%- set a = ([a0 | default("", true) | string] | join("")) -%}
     {%- set an = ((values.bw_p_act_names[i][loop.index0].split('"')[1]) if (values.bw_p_act_names and values.bw_p_act_names[i] and values.bw_p_act_names[i][loop.index0]) else "") -%}
-    {%- set aty = (a.match(r/activityTypeID="([^"]*)"/) or ["", ""])[1] -%}
+    {%- set aty = ((a.split(' activityTypeID="')[1] or "").split('"')[0]) -%}
     {%- set atl = aty | lower -%}
     {%- set rgi = [] -%}
     {%- for rr in reg -%}{%- if rgi.length == 0 and atl.startsWith(rr.p | lower) -%}{%- set _ = rgi.push(rr) -%}{%- endif -%}{%- endfor -%}
     {%- set tech = (rgi[0].tech if rgi.length > 0 else "") -%}
     {%- set cat = (rgi[0].cat if rgi.length > 0 else "") -%}
     {%- set attrsRe = ((rgi[0].attrs if (rgi.length > 0 and rgi[0].attrs != "") else "destinationName")) -%}
-    {%- set dtag = a.match('<attributeBindings[^>]*eAttributeName="(?:' + attrsRe + ')"[^>]*>') -%}
-    {%- set dvar = ((dtag[0].match(r/processProperty="([^"]*)"/) or ["", ""])[1]) if dtag else "" -%}
-    {%- set dlit = (a.match('(?:' + attrsRe + ')="([^"]*)"') or ["", ""])[1] -%}
-    {%- set style = (a.match(r/messagingStyle="([^"]*)"/) or ["", ""])[1] -%}
-    {%- set conn = (a.match(r/(?:connectionReference|jdbcSharedResource|httpClientResource|sharedResource|resource|jmsConnection|kafkaConnection|ftlConnection)="([^"]*)"/) or ["", ""])[1] -%}
-    {%- set where = (a.match(r/(?:requestURI|url|URL|endpointURL|resourcePath|path|operationName|serviceName)="([^"]*)"/) or ["", ""])[1] -%}
-    {%- set sql = (a.match(r/(?:statement|sqlStatement|query)="([^"]*)"/) or ["", ""])[1] -%}
+    {%- set attrNames = attrsRe.split("|") -%}
+    {%- set dvarh = [""] -%}{%- for seg in a.split("<attributeBindings") -%}{%- if loop.index0 > 0 and dvarh[0] == "" -%}{%- set tg = seg.split(">")[0] -%}{%- set en = (tg.split(' eAttributeName="')[1] or "").split('"')[0] -%}{%- if en != "" and en in attrNames -%}{%- set _ = dvarh.splice(0, 1, (tg.split(' processProperty="')[1] or "").split('"')[0]) -%}{%- endif -%}{%- endif -%}{%- endfor -%}
+    {%- set dvar = dvarh[0] -%}
+    {%- set dlith = [""] -%}{%- for an1 in attrNames -%}{%- if dlith[0] == "" -%}{%- set av = ((a.split(" " + an1 + '="')[1] or "").split('"')[0]) -%}{%- if av != "" -%}{%- set _ = dlith.splice(0, 1, av) -%}{%- endif -%}{%- endif -%}{%- endfor -%}
+    {%- set dlit = dlith[0] -%}
+    {%- set style = ((a.split(' messagingStyle="')[1] or "").split('"')[0]) -%}
+    {%- set connh = [""] -%}{%- for an1 in ["connectionReference", "jdbcSharedResource", "httpClientResource", "sharedResource", "resource", "jmsConnection", "kafkaConnection", "ftlConnection"] -%}{%- if connh[0] == "" -%}{%- set av = ((a.split(" " + an1 + '="')[1] or "").split('"')[0]) -%}{%- if av != "" -%}{%- set _ = connh.splice(0, 1, av) -%}{%- endif -%}{%- endif -%}{%- endfor -%}
+    {%- set conn = connh[0] -%}
+    {%- set whereh = [""] -%}{%- for an1 in ["requestURI", "url", "URL", "endpointURL", "resourcePath", "path", "operationName", "serviceName"] -%}{%- if whereh[0] == "" -%}{%- set av = ((a.split(" " + an1 + '="')[1] or "").split('"')[0]) -%}{%- if av != "" -%}{%- set _ = whereh.splice(0, 1, av) -%}{%- endif -%}{%- endif -%}{%- endfor -%}
+    {%- set where = whereh[0] -%}
+    {%- set sqlh = [""] -%}{%- for an1 in ["statement", "sqlStatement", "query"] -%}{%- if sqlh[0] == "" -%}{%- set av = ((a.split(" " + an1 + '="')[1] or "").split('"')[0]) -%}{%- if av != "" -%}{%- set _ = sqlh.splice(0, 1, av) -%}{%- endif -%}{%- endif -%}{%- endfor -%}
+    {%- set sql = sqlh[0] -%}
     {%- set dname = (varVals[varNames.indexOf(dvar)] if (dvar != "" and dvar in varNames) else dlit) -%}
     {%- set verb = atl.split(".") | last -%}
     {%- set kind = "" -%}
@@ -233,7 +245,7 @@
     {#- literal values mapped into target-looking fields (host, URI, topic, table...) -#}
     {%- set hints = [] -%}
     {%- for m in maps -%}
-      {%- if m.act == an and m.const and hints.length < 4 and (m.to | lower).match(r/(uri|url|host|port|path|topic|subject|queue|endpoint|file|table|method|resource)/) -%}{%- set _ = hints.push((m.to.split(r/[\\\/]/) | last) + " = " + m.expr) -%}{%- endif -%}
+      {%- if m.act == an and m.const and hints.length < 4 and ((m.to | lower).replace(r/(uri|url|host|port|path|topic|subject|queue|endpoint|file|table|method|resource)/, "") != (m.to | lower)) -%}{%- set _ = hints.push((m.to.split("/") | last) + " = " + m.expr) -%}{%- endif -%}
     {%- endfor -%}
     {%- set detail = (("destination " + (dname | string)) if (dname | string) != "" else (where if where != "" else "")) -%}
     {%- set _ = ext.push({ "name": an, "type": aty, "conn": conn, "detail": detail, "sql": sql, "kind": kind, "tech": tech, "cat": cat, "hints": hints }) -%}
@@ -242,7 +254,8 @@
     {%- if tech == "HTTP" and conn != "" and atl.endsWith("sendhttprequest") -%}
       {%- set akey = "http:" + conn -%}
       {%- set ai = outKeys.indexOf(akey) -%}
-      {%- if ai < 0 -%}{%- set _ = outKeys.push(akey) -%}{%- set _ = outApis.push({ "key": akey, "kind": "HTTP", "name": ((hints | join(" ")).match(r/(?:RequestURI|URL|URI|Host) = "([^"]*)"/) or ["", conn])[1] or conn, "loc": "", "path": "", "svc": "", "wsdl": "", "ops": [], "meth": [], "hints": [], "procs": [], "acts": [] }) -%}{%- set ai = outApis.length - 1 -%}{%- endif -%}
+      {%- set hj = (hints | join(" ")) -%}{%- set hjv = hj.replace(r/^[\s\S]*?(?:RequestURI|URL|URI|Host) = "([^"]*)"[\s\S]*$/, "$1") -%}
+      {%- if ai < 0 -%}{%- set _ = outKeys.push(akey) -%}{%- set _ = outApis.push({ "key": akey, "kind": "HTTP", "name": (hjv if (hjv != hj and hjv != "") else conn), "loc": "", "path": "", "svc": "", "wsdl": "", "ops": [], "meth": [], "hints": [], "procs": [], "acts": [] }) -%}{%- set ai = outApis.length - 1 -%}{%- endif -%}
       {%- if pname not in outApis[ai].procs -%}{%- set _ = outApis[ai].procs.push(pname) -%}{%- endif -%}
       {%- set _ = outApis[ai].acts.push(pname + "." + an) -%}
       {%- for h in hints -%}{%- if h not in outApis[ai].hints -%}{%- set _ = outApis[ai].hints.push(h) -%}{%- endif -%}{%- endfor -%}
@@ -285,7 +298,7 @@
   {%- set edges = [] -%}{%- set nodes = [] -%}
   {%- set lnames = [] -%}{%- set ltyp = [] -%}
   {%- for lx0 in ((values.bw_p_links[i] if values.bw_p_links else []) or []) -%}{%- set lx = ([lx0 | default("", true) | string] | join("")) -%}
-    {%- set _ = lnames.push((lx.match(r/\sname="([^"]*)"/) or ["", ""])[1]) -%}{%- set _ = ltyp.push((lx.match(r/linkType="([^"]*)"/) or ["", ""])[1]) -%}
+    {%- set _ = lnames.push(((lx.split(' name="')[1] or "").split('"')[0])) -%}{%- set _ = ltyp.push(((lx.split('linkType="')[1] or "").split('"')[0])) -%}
   {%- endfor -%}
   {%- set srcs = ((values.bw_p_srcs[i] if values.bw_p_srcs else []) or []) -%}
   {%- set srcn = ((values.bw_p_srcn[i] if values.bw_p_srcn else []) or []) -%}
@@ -295,12 +308,12 @@
       <source linkName> equals another activity's <target linkName> -#}
   {%- for sx in srcs -%}
     {%- set si = loop.index0 -%}
-    {%- for sm in (sx.match(r/linkName="[^"]*"/g) or []) -%}
-      {%- set lname = sm.split('"')[1] -%}
+    {%- for sm in sx.split('linkName="') -%}{%- if loop.index0 > 0 -%}
+      {%- set lname = sm.split('"')[0] -%}
       {%- for tx in tgts -%}
         {%- set ti = loop.index0 -%}
-        {%- for tm in (tx.match(r/linkName="[^"]*"/g) or []) -%}
-          {%- if tm.split('"')[1] == lname and srcn[si] and tgtn[ti] -%}
+        {%- for tm in tx.split('linkName="') -%}
+          {%- if loop.index0 > 0 and tm.split('"')[0] == lname and srcn[si] and tgtn[ti] -%}
             {%- set fa = srcn[si].split('"')[1] -%}{%- set ta = tgtn[ti].split('"')[1] -%}
             {%- set lti = lnames.indexOf(lname) -%}
             {%- set lt = (ltyp[lti] if lti >= 0 else "SUCCESS") -%}
@@ -308,14 +321,15 @@
             {%- set crest = sx.substring(cpos + 12 + lname.length) -%}
             {%- set cnxt = crest.indexOf('linkName="') -%}
             {%- set cseg = (crest.substring(0, cnxt) if cnxt >= 0 else crest) -%}
-            {%- set cm = cseg.match(r/transitionCondition[^>]*>(?:<!\[CDATA\[)?([^\]<]*)/) -%}
-            {%- set _ = edges.push({ "from": fa, "to": ta, "lt": lt, "cond": ((cm[1] | trim) if cm else "") }) -%}
+            {%- set cp1 = (cseg.split("transitionCondition")[1] or "") -%}
+            {%- set cond1 = (cp1.replace(r/^[^>]*>/, "").replace(r/^<!\[CDATA\[/, "").split("]")[0].split("<")[0] | trim) if cp1 != "" else "" -%}
+            {%- set _ = edges.push({ "from": fa, "to": ta, "lt": lt, "cond": cond1 }) -%}
             {%- if fa not in nodes -%}{%- set _ = nodes.push(fa) -%}{%- endif -%}
             {%- if ta not in nodes -%}{%- set _ = nodes.push(ta) -%}{%- endif -%}
           {%- endif -%}
         {%- endfor -%}
       {%- endfor -%}
-    {%- endfor -%}
+    {%- endif -%}{%- endfor -%}
   {%- endfor -%}
   {%- for tn in tnames -%}{%- if tn != "" and tn not in nodes -%}{%- set _ = nodes.push(tn) -%}{%- endif -%}{%- endfor -%}
   {#- connected components of the link graph: the main flow, plus each group body and fault handler -#}
@@ -339,7 +353,7 @@
   {%- for rt in croots -%}
     {%- set ri = loop.index0 -%}
     {%- set gflag = [] -%}
-    {%- for n in nodes -%}{%- if cidx[loop.index0] == ri and n.match(r/^GroupStart/) -%}{%- set _ = gflag.push(1) -%}{%- endif -%}{%- endfor -%}
+    {%- for n in nodes -%}{%- if cidx[loop.index0] == ri and (n.replace(r/^GroupStart/, "") != n) -%}{%- set _ = gflag.push(1) -%}{%- endif -%}{%- endfor -%}
     {%- if ri == 0 -%}{%- set _ = glabels.push("") -%}
     {%- elif gflag.length > 0 and gused[0] < gnames.length -%}{%- set _ = glabels.push("Group: " + gnames[gused[0]].split('"')[1]) -%}{%- set _ = gused.splice(0, 1, gused[0] + 1) -%}
     {%- else -%}{%- set _ = glabels.push("Fault or event handler") -%}
@@ -394,7 +408,7 @@
     {%- if v.startsWith("#!") -%}{%- set nObf = nObf + 1 -%}
     {%- elif v.startsWith("%%") -%}
     {%- else -%}
-      {%- if v.match(r/(^|[^0-9.])((10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})([^0-9]|$)/) -%}
+      {%- if v.replace(r/(^|[^0-9.])((10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})([^0-9]|$)/, "") != v -%}
         {%- set _ = findings.push({ "level": "Warning", "area": "Configuration", "text": "`" + n + "` holds a hardcoded private IP address. Prefer a host name or an environment-specific value." }) -%}
       {%- endif -%}
       {%- if v.startsWith("http://") and not ("localhost" in v) -%}
@@ -413,7 +427,7 @@
 {%- set sleepish = [] -%}
 {%- for p in procs -%}
   {%- for ty in p.types -%}
-    {%- if ty.endsWith(".sleep") and p.tnames[loop.index0] and p.tnames[loop.index0].match(r/(database|db|query|insert|update|select|call|service|api|http|send|lookup)/i) -%}
+    {%- if ty.endsWith(".sleep") and p.tnames[loop.index0] and (p.tnames[loop.index0].replace(r/(database|db|query|insert|update|select|call|service|api|http|send|lookup)/i, "") != p.tnames[loop.index0]) -%}
       {%- set _ = sleepish.push(p.name + "." + p.tnames[loop.index0]) -%}
     {%- endif -%}
   {%- endfor -%}
@@ -432,9 +446,9 @@
 {%- if (values.bw_tests or []).length == 0 -%}{%- set _ = findings.push({ "level": "Info", "area": "Testing", "text": "No BusinessWorks test suites were found under a Tests folder." }) -%}{%- endif -%}
 {%- set totalMaps = 0 -%}{%- for p in procs -%}{%- set totalMaps = totalMaps + p.maps.length -%}{%- endfor -%}
 {%- for ea in extActs -%}
-  {%- if ea.sql != "" and ea.sql.match(r/select\s+\*/i) -%}{%- set _ = findings.push({ "level": "Info", "area": "Database", "text": "`" + ea.proc + "." + ea.name + "` selects with `SELECT *`. Naming the columns keeps the mapping stable when the table changes." }) -%}{%- endif -%}
+  {%- if ea.sql != "" and (ea.sql.replace(r/select\s+\*/i, "") != ea.sql) -%}{%- set _ = findings.push({ "level": "Info", "area": "Database", "text": "`" + ea.proc + "." + ea.name + "` selects with `SELECT *`. Naming the columns keeps the mapping stable when the table changes." }) -%}{%- endif -%}
   {%- for h in ea.hints -%}
-    {%- if h.match(r/(https?:\/\/|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/) -%}{%- set _ = findings.push({ "level": "Warning", "area": "Configuration", "text": "`" + ea.proc + "." + ea.name + "` has a hard-coded address in its input mapping (" + h + "). Move it to a module property or a shared resource." }) -%}{%- endif -%}
+    {%- if (h.replace(r/(https?:\/\/|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/, "") != h) -%}{%- set _ = findings.push({ "level": "Warning", "area": "Configuration", "text": "`" + ea.proc + "." + ea.name + "` has a hard-coded address in its input mapping (" + h + "). Move it to a module property or a shared resource." }) -%}{%- endif -%}
   {%- endfor -%}
 {%- endfor -%}
 {%- set nWarn = 0 -%}{%- for fnd in findings -%}{%- if fnd.level == "Warning" -%}{%- set nWarn = nWarn + 1 -%}{%- endif -%}{%- endfor -%}
@@ -454,7 +468,7 @@
   {%- if q.tech != "JMS" and q.tech not in tkTech -%}
     {%- set hintRe = [] -%}{%- for rr in reg -%}{%- if rr.tech == q.tech and rr.hint != "" -%}{%- set _ = hintRe.push(rr.hint) -%}{%- endif -%}{%- endfor -%}
     {%- set urlh = [] -%}
-    {%- if hintRe.length > 0 -%}{%- for x in vars -%}{%- if urlh.length == 0 and x.v is string and x.v != "" and (x.n | lower).match(hintRe[0]) and not x.v.startsWith("#!") -%}{%- set _ = urlh.push(x.v) -%}{%- endif -%}{%- endfor -%}{%- endif -%}
+    {%- if hintRe.length > 0 -%}{%- for x in vars -%}{%- if urlh.length == 0 and x.v is string and x.v != "" and not x.v.startsWith("#!") -%}{%- set xl = (x.n | lower) -%}{%- for hn in hintRe[0].split("|") -%}{%- if urlh.length == 0 and hn in xl -%}{%- set _ = urlh.push(x.v) -%}{%- endif -%}{%- endfor -%}{%- endif -%}{%- endfor -%}{%- endif -%}
     {%- set url = (urlh[0] if urlh.length > 0 else "") -%}
     {%- set tslug = q.tech | lower | replace(r/[^a-z0-9]+/g, "-") -%}
     {%- set shareK = shared and url != "" and not ("localhost" in url) and not url.startsWith("127.") -%}
@@ -483,11 +497,11 @@
 {%- set emitDb = (not dbShared) or values.infraMode == "shared-define" -%}
 {%- set dbTables = [] -%}{%- set dbTableKeys = [] -%}
 {%- for ea in extActs -%}
-  {%- for tm in (ea.sql.match(r/\b(?:from|join|into|update)\s+[A-Za-z_][A-Za-z0-9_.$]*/gi) or []) -%}
-    {%- set tname = tm.split(" ") | last -%}
+  {%- for tm in ea.sql.replace(r/\b(?:from|join|into|update)\s+([A-Za-z_][A-Za-z0-9_.$]*)/gi, "‡$1‡").split("‡") -%}
+    {%- if loop.index0 % 2 == 1 -%}{%- set tname = tm -%}
     {%- set tkey = (tname.split(".") | last) | lower -%}
     {%- if tkey not in ["select", "set", "values", "dual"] and tkey not in dbTableKeys -%}{%- set _ = dbTables.push(tname) -%}{%- set _ = dbTableKeys.push(tkey) -%}{%- endif -%}
-  {%- endfor -%}
+  {%- endif -%}{%- endfor -%}
 {%- endfor -%}
 {#- outbound REST/SOAP/HTTP dependencies become API entities the application consumes -#}
 {%- set oaIds = [] -%}{%- set oaEmit = [] -%}{%- set consumes = [] -%}
@@ -502,7 +516,7 @@
 {#- WSDL files in Service Descriptors: consumed when an outbound SOAP reference uses them, otherwise provided -#}
 {%- set wsdlConsumed = [] -%}
 {%- for f in (values.bw_wsdl_files or []) -%}{%- set f = f | replace("\\", "/") -%}
-  {%- set wb = (f.split(r/[\\\/]/) | last) -%}{%- set wc = [] -%}
+  {%- set wb = (f.split("/") | last) -%}{%- set wc = [] -%}
   {%- for oa in outApis -%}{%- if oa.wsdl == wb -%}{%- set _ = wc.push(1) -%}{%- endif -%}{%- endfor -%}
   {%- set _ = wsdlConsumed.push(wc.length > 0) -%}
 {%- endfor -%}
@@ -514,7 +528,7 @@
 {%- set viaJms = jd.length > 0 -%}
 {%- set viaJdbc = false -%}
 {%- for f in values.bw_resources -%}{%- set f = f | replace("\\", "/") -%}
-  {%- set fext = (f.split(r/[\\\/]/) | last).split(".") | last -%}
+  {%- set fext = (f.split("/") | last).split(".") | last -%}
   {%- if fext == "jmsConnResource" -%}{%- set viaJms = true -%}{%- endif -%}
   {%- if fext == "jdbcResource" -%}{%- set viaJdbc = true -%}{%- endif -%}
 {%- endfor -%}
@@ -522,9 +536,9 @@
 {%- if jdbcUrl != "" and not viaJdbc -%}{%- set _ = resRefs.push("resource:default/" + dbId) -%}{%- endif -%}
 {%- for q in dests -%}{%- set _ = resRefs.push("resource:default/" + qids[loop.index0]) -%}{%- endfor -%}
 {%- set resNames = [] -%}{%- set apiNames = [] -%}{%- set wsdlNames = [] -%}
-{%- for f in values.bw_resources -%}{%- set f = f | replace("\\", "/") -%}{%- set nm0 = ((lid + "-" + ((f.split(r/[\\\/]/) | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = (nm0 | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = ((nm0 | truncate(57, true, "") | replace(r/[-_.]+$/, "")) + "-" + (loop.index0 + 1)) if (nm1 in resNames or nm0.length > 63) else nm1 -%}{%- set _ = resNames.push(nm1) -%}{%- set _ = resRefs.push("resource:default/" + resNames[loop.index0]) -%}{%- endfor -%}
-{%- for f in values.bw_swagger_files -%}{%- set f = f | replace("\\", "/") -%}{%- set nm0 = ((lid + "-" + ((f.split(r/[\\\/]/) | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = (nm0 | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = ((nm0 | truncate(57, true, "") | replace(r/[-_.]+$/, "")) + "-" + (loop.index0 + 1)) if (nm1 in apiNames or nm0.length > 63) else nm1 -%}{%- set _ = apiNames.push(nm1) -%}{%- set _ = apiRefs.push("api:default/" + apiNames[loop.index0]) -%}{%- endfor -%}
-{%- for f in (values.bw_wsdl_files or []) -%}{%- set f = f | replace("\\", "/") -%}{%- set nm0 = ((lid + "-" + ((f.split(r/[\\\/]/) | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = (nm0 | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = ((nm0 | truncate(57, true, "") | replace(r/[-_.]+$/, "")) + "-" + (loop.index0 + 1)) if (nm1 in wsdlNames or nm0.length > 63) else nm1 -%}{%- set _ = wsdlNames.push(nm1) -%}{%- if not wsdlConsumed[loop.index0] -%}{%- set _ = apiRefs.push("api:default/" + wsdlNames[loop.index0]) -%}{%- elif ("api:default/" + wsdlNames[loop.index0]) not in consumes -%}{%- set _ = consumes.push("api:default/" + wsdlNames[loop.index0]) -%}{%- endif -%}{%- endfor -%}
+{%- for f in values.bw_resources -%}{%- set f = f | replace("\\", "/") -%}{%- set nm0 = ((lid + "-" + ((f.split("/") | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = (nm0 | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = ((nm0 | truncate(57, true, "") | replace(r/[-_.]+$/, "")) + "-" + (loop.index0 + 1)) if (nm1 in resNames or nm0.length > 63) else nm1 -%}{%- set _ = resNames.push(nm1) -%}{%- set _ = resRefs.push("resource:default/" + resNames[loop.index0]) -%}{%- endfor -%}
+{%- for f in values.bw_swagger_files -%}{%- set f = f | replace("\\", "/") -%}{%- set nm0 = ((lid + "-" + ((f.split("/") | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = (nm0 | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = ((nm0 | truncate(57, true, "") | replace(r/[-_.]+$/, "")) + "-" + (loop.index0 + 1)) if (nm1 in apiNames or nm0.length > 63) else nm1 -%}{%- set _ = apiNames.push(nm1) -%}{%- set _ = apiRefs.push("api:default/" + apiNames[loop.index0]) -%}{%- endfor -%}
+{%- for f in (values.bw_wsdl_files or []) -%}{%- set f = f | replace("\\", "/") -%}{%- set nm0 = ((lid + "-" + ((f.split("/") | last).replace(r/\.[^.]*$/, "") | lower)) | replace(r/[^a-z0-9._-]+/g, "-") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = (nm0 | truncate(63, true, "") | replace(r/[-_.]+$/, "")) -%}{%- set nm1 = ((nm0 | truncate(57, true, "") | replace(r/[-_.]+$/, "")) + "-" + (loop.index0 + 1)) if (nm1 in wsdlNames or nm0.length > 63) else nm1 -%}{%- set _ = wsdlNames.push(nm1) -%}{%- if not wsdlConsumed[loop.index0] -%}{%- set _ = apiRefs.push("api:default/" + wsdlNames[loop.index0]) -%}{%- elif ("api:default/" + wsdlNames[loop.index0]) not in consumes -%}{%- set _ = consumes.push("api:default/" + wsdlNames[loop.index0]) -%}{%- endif -%}{%- endfor -%}
 {%- set tags = ["tibco", "businessworks", ("bwce" if isCE else "bw6")] -%}
 {%- for p in values.bw_palettes -%}
   {%- set t = p.replace("name=bw.", "").replace("name=bw", "") | lower | replace(r/[^a-z0-9+#]+/g, "-") | replace(r/^-+|-+$/g, "") | truncate(63, true, "") -%}

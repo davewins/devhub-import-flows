@@ -12,6 +12,6 @@ No XML schemas found under `Schemas/`.
 {%- set i = loop.index0 -%}
 {%- set els = [] -%}{%- for e in ((values.bw_s_elems[i] if values.bw_s_elems else []) or []) -%}{%- set _ = els.push(e.split('"')[1]) -%}{%- endfor -%}
 {%- set tys = [] -%}{%- for e in ((values.bw_s_types[i] if values.bw_s_types else []) or []) -%}{%- set _ = tys.push(e.split('"')[1]) -%}{%- endfor -%}
-| `${{ f.split(r/[\\\/]/) | last }}` | ${{ (els.slice(0, 12) | join(", ")) if els.length > 0 else "-" }}${{ (" (+" + (els.length - 12) + " more)") if els.length > 12 else "" }} | ${{ (tys.slice(0, 12) | join(", ")) if tys.length > 0 else "-" }}${{ (" (+" + (tys.length - 12) + " more)") if tys.length > 12 else "" }} |
+| `${{ f.split("/") | last }}` | ${{ (els.slice(0, 12) | join(", ")) if els.length > 0 else "-" }}${{ (" (+" + (els.length - 12) + " more)") if els.length > 12 else "" }} | ${{ (tys.slice(0, 12) | join(", ")) if tys.length > 0 else "-" }}${{ (" (+" + (tys.length - 12) + " more)") if tys.length > 12 else "" }} |
 {% endfor %}
 {% endif %}

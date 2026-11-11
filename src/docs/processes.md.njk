@@ -99,8 +99,8 @@ ${{ '    ' }}- **${{ e.name if e.name != "" else e.type }}** (`${{ e.type }}`)${
 {%- for n in p.nodes -%}
 {%- set ti = p.tnames.indexOf(n) -%}{%- set ty = ((p.types[ti] | lower) if ti >= 0 else "") -%}
 {%- set fill = "#e8f4f8" -%}
-{%- if ty.endsWith(".receive") or ty.endsWith("receivemessage") or ty.endsWith("listener") or ty.endsWith("timer") or ty.endsWith("onstartup") or ty.endsWith("onevent") or n == "Start" or n.match(r/^GroupStart/) -%}{%- set fill = "#c8e6c9" -%}
-{%- elif ty.endsWith(".reply") or ty.endsWith(".end") or n == "End" or n.match(r/^GroupEnd/) -%}{%- set fill = "#ffe0b2" -%}
+{%- if ty.endsWith(".receive") or ty.endsWith("receivemessage") or ty.endsWith("listener") or ty.endsWith("timer") or ty.endsWith("onstartup") or ty.endsWith("onevent") or n == "Start" or (n.replace(r/^GroupStart/, "") != n) -%}{%- set fill = "#c8e6c9" -%}
+{%- elif ty.endsWith(".reply") or ty.endsWith(".end") or n == "End" or (n.replace(r/^GroupEnd/, "") != n) -%}{%- set fill = "#ffe0b2" -%}
 {%- elif ty.endsWith("catch") or ty.endsWith("throw") or ty.endsWith("rethrow") or ty.endsWith("error") -%}{%- set fill = "#ffcdd2" -%}
 {%- elif ty.endsWith("callprocess") -%}{%- set fill = "#bbdefb" -%}
 {%- elif ty.endsWith(".log") -%}{%- set fill = "#eceff1" -%}

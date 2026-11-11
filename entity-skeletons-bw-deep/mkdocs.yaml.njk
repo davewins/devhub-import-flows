@@ -1,4 +1,4 @@
-{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split(r/[\\\/]/) | last) -%}
+{%- set app = values.bw_app_name[0] if (values.bw_app_name and values.bw_app_name[0]) else (values.app_dir.split("/") | last) -%}
 site_name: ${{ (app + " (BusinessWorks)") | dump }}
 site_description: ${{ ("Documentation generated from the " + app + " BusinessWorks project") | dump }}
 nav:
