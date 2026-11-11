@@ -97,7 +97,7 @@
   { "p": "bw.sap.", "tech": "SAP", "cat": "other", "attrs": "", "hint": "" }
 ] -%}
 {%- set outApis = [] -%}{%- set outKeys = [] -%}
-{%- set procs = [] -%}
+{%- set procs = [] -%}{%- set bdbg = [] -%}
 {%- set typeNames = [] -%}{%- set typeCounts = [] -%}
 {%- set extActs = [] -%}
 {%- set restEps = [] -%}
@@ -124,11 +124,12 @@
   {%- set bown = ((values.bw_p_bind_owner[i] if values.bw_p_bind_owner else []) or []) -%}
   {%- if bnd.length > 0 and bnd.length == bown.length -%}
   {%- for bx0 in bnd -%}
-    {%- set bx = (bx0 | default("", true) | string) -%}
+    {%- set bx = ([bx0 | default("", true) | string] | join("")) -%}{%- if bx.length < 20 or ("inputBinding" not in bx) -%}{%- set _ = bdbg.push("process " + pname + ", binding " + loop.index + ": " + ((bx0 | dump) | truncate(160, true, "..."))) -%}{%- endif -%}
     {%- set bact = ((bown[loop.index0] | default("", true) | string).split('"')[1]) or "" -%}
     {%- set emv = (bx | replace(r/^[\s\S]*?\sexpression="([^"]*)"[\s\S]*$/, "$1")) -%}
     {%- set xs = (emv if emv != bx else (bx | replace(r/^[^>]*>/, "") | replace(r/<\/[^>]*>\s*$/, ""))) -%}
     {%- set xs = xs.replace(r/&lt;/g, "<").replace(r/&gt;/g, ">").replace(r/&quot;/g, '"').replace(r/&apos;/g, "'").replace(r/&#xa;|&#10;|&#xd;/g, " ").replace(r/&amp;/g, "&") -%}
+    {%- set xs = ([xs] | join("")) -%}
     {%- set path = [] -%}{%- set stk = [] -%}{%- set ctx = [] -%}
     {%- for tk in (xs.match(r/<(?:[^>"']|"[^"]*"|'[^']*')*>|[^<]+/g) or []) -%}
       {%- if tk.startsWith("</") -%}
@@ -188,7 +189,7 @@
   {%- endfor -%}
   {%- endif -%}
   {%- set jmsIn = [] -%}{%- set jmsOut = [] -%}{%- set ext = [] -%}
-  {%- for a in ((values.bw_p_acts[i] if values.bw_p_acts else []) or []) -%}
+  {%- for a0 in ((values.bw_p_acts[i] if values.bw_p_acts else []) or []) -%}{%- set a = ([a0 | default("", true) | string] | join("")) -%}
     {%- set an = ((values.bw_p_act_names[i][loop.index0].split('"')[1]) if (values.bw_p_act_names and values.bw_p_act_names[i] and values.bw_p_act_names[i][loop.index0]) else "") -%}
     {%- set aty = (a.match(r/activityTypeID="([^"]*)"/) or ["", ""])[1] -%}
     {%- set atl = aty | lower -%}
@@ -283,7 +284,7 @@
   {%- for ty in types -%}{%- if ("timer" in (ty | lower)) -%}{%- set _ = timers.push(ty) -%}{%- endif -%}{%- endfor -%}
   {%- set edges = [] -%}{%- set nodes = [] -%}
   {%- set lnames = [] -%}{%- set ltyp = [] -%}
-  {%- for lx in ((values.bw_p_links[i] if values.bw_p_links else []) or []) -%}
+  {%- for lx0 in ((values.bw_p_links[i] if values.bw_p_links else []) or []) -%}{%- set lx = ([lx0 | default("", true) | string] | join("")) -%}
     {%- set _ = lnames.push((lx.match(r/\sname="([^"]*)"/) or ["", ""])[1]) -%}{%- set _ = ltyp.push((lx.match(r/linkType="([^"]*)"/) or ["", ""])[1]) -%}
   {%- endfor -%}
   {%- set srcs = ((values.bw_p_srcs[i] if values.bw_p_srcs else []) or []) -%}

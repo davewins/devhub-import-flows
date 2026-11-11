@@ -65,3 +65,13 @@ The table is cut at 250 rows; the full mappings are listed per process below.
 {% endif -%}
 {%- endfor -%}
 {%- endif %}
+
+{% if bdbg.length > 0 -%}
+## Diagnostics
+
+${{ bdbg.length }} mapping${{ "" if bdbg.length == 1 else "s" }} could not be read as XSLT (empty or unexpected content from the extraction step). First entries:
+
+{% for d in bdbg.slice(0, 5) -%}
+- `${{ d | replace("`", "'") }}`
+{% endfor %}
+{% endif %}
