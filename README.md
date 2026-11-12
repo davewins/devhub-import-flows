@@ -304,6 +304,7 @@ target repository can be **created or updated**.
 | Internet Server partner users | **Resource** `mft-partner-user`, depends on the endpoints their allowed protocols permit |
 | system keys and stored server certificates | **Resource** `certificate`, `mft/cert-expires`, `mft/cert-days-left`-style findings, tags `cert-expiring` / `cert-expired` |
 | Platform Server transfers; Internet Server transfers (inbound `*LOCAL`, outbound to a partner) | **Component** `file-transfer`, depends on servers / endpoints / users; earliest certificate expiry on the transfer |
+| relationships | Edges flow outward from the Command Center, so the topology reads as a tree: Command Center → Platform Servers, partner server definitions and the Internet Server; Platform Server → the transfers it initiates and its certificates (a transfer → the responding server); Internet Server → listeners, partner users and keys; partner user → their transfers (→ the listeners they may use); outbound transfer → partner server → pinned certificate. Only the Command Center is `spec.system`-bound, otherwise every entity would hang off the System. These are `dependsOn` edges read as "manages / uses". |
 | everything | **TechDocs**: overview, findings (clear text, expiring certificates, licence), certificates, transfers |
 
 Requirements and limits:

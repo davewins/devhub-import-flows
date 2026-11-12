@@ -39,6 +39,28 @@ spec:
   lifecycle: ${{ values.lifecycle | dump }}
   owner: ${{ values.owner | dump }}
   system: ${{ values.system | dump }}
+{%- if ccDeps.length > 0 %}
+  dependsOn: ${{ ccDeps | dump }}
+{%- endif %}
+{%- if isName != "" %}
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ isName | dump }}
+  title: ${{ ("Internet Server " + values.isHost) | dump }}
+  description: ${{ ("TIBCO MFT Internet Server " + values.isHost + ": partner-facing FTP / FTPS / SFTP / HTTPS gateway") | dump }}
+  tags: ["mft-internet-server"]
+  annotations:
+    mft/instance: ${{ inst | dump }}
+    mft/host: ${{ values.isHost | dump }}
+spec:
+  type: mft-internet-server
+  owner: ${{ values.owner | dump }}
+{%- if isDeps.length > 0 %}
+  dependsOn: ${{ isDeps | dump }}
+{%- endif %}
+{%- endif %}
 {%- for sv in svs %}
 ---
 apiVersion: backstage.io/v1alpha1
@@ -68,7 +90,6 @@ metadata:
 spec:
   type: mft-server
   owner: ${{ values.owner | dump }}
-  system: ${{ values.system | dump }}
 {%- if sv.deps.length > 0 %}
   dependsOn: ${{ sv.deps | dump }}
 {%- endif %}
@@ -93,7 +114,6 @@ metadata:
 spec:
   type: mft-protocol-endpoint
   owner: ${{ values.owner | dump }}
-  system: ${{ values.system | dump }}
 {%- if ep.certId != "" %}
   dependsOn: ${{ ["resource:default/" + nm(inst, "cert", ep.certId)] | dump }}
 {%- endif %}
@@ -122,7 +142,6 @@ metadata:
 spec:
   type: mft-partner-user
   owner: ${{ values.owner | dump }}
-  system: ${{ values.system | dump }}
 {%- if us.deps.length > 0 %}
   dependsOn: ${{ us.deps | dump }}
 {%- endif %}
@@ -152,7 +171,6 @@ metadata:
 spec:
   type: certificate
   owner: ${{ values.owner | dump }}
-  system: ${{ values.system | dump }}
 {%- endfor %}
 {%- for t in pts %}
 ---
@@ -188,7 +206,6 @@ spec:
   type: file-transfer
   lifecycle: ${{ values.lifecycle | dump }}
   owner: ${{ values.owner | dump }}
-  system: ${{ values.system | dump }}
 {%- if t.deps.length > 0 %}
   dependsOn: ${{ t.deps | dump }}
 {%- endif %}
@@ -224,7 +241,6 @@ spec:
   type: file-transfer
   lifecycle: ${{ values.lifecycle | dump }}
   owner: ${{ values.owner | dump }}
-  system: ${{ values.system | dump }}
 {%- if t.deps.length > 0 %}
   dependsOn: ${{ t.deps | dump }}
 {%- endif %}
