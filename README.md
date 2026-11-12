@@ -284,7 +284,7 @@ Imports a TIBCO MFT estate (Command Center, Internet Server, Platform Server) in
 push → register pattern as the BusinessWorks flows, with two differences: the source is a **live Command Center**, and the
 target repository can be **created or updated**.
 
-1. **Command Center page**: URL, user and password (a scaffolder secret, never written anywhere), whether to include
+1. **Command Center page**: REST API version (`v7` for MFT 8.7; other versions untested), URL, user and password (a scaffolder secret, never written anywhere), whether to include
    Internet Server definitions, the Internet Server host name (for the FTP / FTPS / SFTP listeners), HTTPS port, warning window.
 2. **Repository page**: git provider (GitHub, GitLab, Bitbucket Cloud, Bitbucket Server / Data Center, Gitea / Forgejo; cloud or
    self-hosted), repository, branch, output folder, and **Use an existing repository (update it)** or **Create the repository**.

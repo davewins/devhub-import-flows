@@ -110,9 +110,9 @@ const skelRender = (src, dst, values, replace = false) => {
 };
 
 // MFT flow: tibco:call-platform-api is answered from REST responses saved as JSON (MFT_FIXTURES=<dir>, same layout as mft-fixtures/)
-const REST = { '/admin/v7/servers': 'servers.json', '/admincc/v7/pstransfers': 'pstransfers.json', '/admin/v7/protocolpublickeys': 'protocolpublickeys.json', '/admin/v7/protocolsystemkeys': 'protocolsystemkeys.json', '/admin/v7/users': 'is-users.json', '/admin/v7/transfers': 'is-transfers.json', '/admin/v7/version': 'version.json', '/admin/v7/license': 'license.json' };
+const REST = { '/admin/v7/servers': 'servers.json', '/admincc/v7/pstransfers': 'pstransfers.json', '/admin/v7/protocolpublickeys': 'protocolpublickeys.json', '/admin/v7/protocolsystemkeys': 'protocolsystemkeys.json', '/admin/v7/users': 'is-users.json', '/admin/v7/transfers': 'is-transfers.json', '/admin/v7/mft/version': 'version.json', '/admin/v7/mft/licenseinfo': 'license.json' };
 const restFixture = ep => {
-  const bare = ep.split('?')[0].replace('/cfcc/rest', ''); let f = REST[bare]; const m = bare.match(/tranferserverconfig\/(ftp|ssh)\//); if (m) f = `is-${m[1]}-config.json`;
+  const bare = ep.split('?')[0].replace('/cfcc/rest', '').replace(/^\/(admin|admincc)\/v\d+\//, '/$1/v7/'); let f = REST[bare]; const m = bare.match(/tranferserverconfig\/(ftp|ssh)\//); if (m) f = `is-${m[1]}-config.json`;
   const fp = f && process.env.MFT_FIXTURES && path.join(process.env.MFT_FIXTURES, f);
   if (!fp || !fs.existsSync(fp)) throw new Error('no fixture for ' + bare);
   return JSON.parse(fs.readFileSync(fp, 'utf8'));

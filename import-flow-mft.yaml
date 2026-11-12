@@ -21,10 +21,22 @@ spec:
   parameters:
     - title: Command Center
       required:
+        - apiVersion
         - ccUrl
         - ccUser
         - ccPassword
       properties:
+        apiVersion:
+          title: REST API version
+          type: string
+          default: v7
+          enum: [v7, v6, v5, v4, v3, v2]
+          description: >-
+            The version segment in the Command Center REST paths (/cfcc/rest/admin/<version>/servers). It depends on the
+            MFT release, and the flow uses it for every call. To find yours, run
+            curl -u <user> <Command Center URL>/cfcc/public/docs/admin.json and look at the paths, or open
+            <Command Center URL>/cfcc/public/docs/. MFT 8.7 uses v7. Older versions may lack some endpoints or fields;
+            the flow tolerates missing fields but a missing endpoint stops the run, and the log shows which one.
         ccUrl:
           title: Command Center URL
           type: string
@@ -54,8 +66,8 @@ spec:
           description: >-
             Only the host name Internet Server is registered under in Command Center, for example
             tibco-mft.lab.local. No https://, no port, no path. It is used to read the FTP / FTPS / SFTP listener
-            settings (/admin/v7/tranferserverconfig/ftp/<host>); a wrong name gives a 404. To see the registered
-            names open <Command Center URL>/cfcc/rest/admincc/v7/hoststats (ignore entries ending in _CC).
+            settings (/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/<host>); a wrong name gives a 404. To see the registered
+            names open <Command Center URL>/cfcc/rest/admincc/${{ parameters.apiVersion }}/hoststats (ignore entries ending in _CC).
             Leave empty to skip the FTP / FTPS / SFTP listeners.
         httpsPort:
           title: Internet Server HTTPS port
@@ -286,7 +298,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/v7/servers
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/servers
         method: GET
         requireAuth: false
         headers:
@@ -297,7 +309,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/v7/protocolpublickeys?keyType=All&userServerFlag=Server
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/protocolpublickeys?keyType=All&userServerFlag=Server
         method: GET
         requireAuth: false
         headers:
@@ -308,7 +320,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/v7/protocolsystemkeys
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/protocolsystemkeys
         method: GET
         requireAuth: false
         headers:
@@ -319,7 +331,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admincc/v7/pstransfers
+        endpoint: /cfcc/rest/admincc/${{ parameters.apiVersion }}/pstransfers
         method: GET
         requireAuth: false
         headers:
@@ -331,7 +343,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/v7/users
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/users
         method: GET
         requireAuth: false
         headers:
@@ -343,7 +355,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/v7/transfers
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/transfers
         method: GET
         requireAuth: false
         headers:
@@ -356,7 +368,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/v7/tranferserverconfig/ftp/${{ parameters.isHost }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ parameters.isHost }}
         method: GET
         requireAuth: false
         headers:
@@ -369,7 +381,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/v7/tranferserverconfig/ssh/${{ parameters.isHost }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ parameters.isHost }}
         method: GET
         requireAuth: false
         headers:
@@ -381,7 +393,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/v7/version
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/mft/version
         method: GET
         requireAuth: false
         headers:
@@ -393,7 +405,7 @@ spec:
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/v7/license
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/mft/licenseinfo
         method: GET
         requireAuth: false
         headers:

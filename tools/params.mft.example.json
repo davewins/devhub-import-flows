@@ -1,4 +1,5 @@
 {
+ "apiVersion": "v7",
  "ccUrl": "https://tibco-mft.lab.local:8443",
  "ccUser": "admin",
  "ccPassword": "x",
