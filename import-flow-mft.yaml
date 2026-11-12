@@ -1,0 +1,457 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: import-flow-mft
+  title: Import flow for TIBCO MFT (Command Center, Internet Server, Platform Server)
+  description: >-
+    Reads a live TIBCO MFT Command Center through its REST API and generates catalog entities for servers,
+    transfer definitions (Platform Server and Internet Server, inbound and outbound), Internet Server protocol
+    endpoints, partner users and certificates, with certificate-expiry and insecure-transport findings and a
+    TechDocs skeleton. Writes them to a new or an existing git repository and registers them.
+  tags:
+    - import-flow
+    - tibco
+    - mft
+    - managed-file-transfer
+    - developer-hub
+spec:
+  owner: group:default/tibco-imported
+  type: integration
+
+  parameters:
+    - title: Command Center
+      required:
+        - ccUrl
+        - ccUser
+        - ccPassword
+      properties:
+        ccUrl:
+          title: Command Center URL
+          type: string
+          description: >-
+            Base URL of the Command Center web application, for example https://mft.example.com:8443 (the flow
+            calls <url>/cfcc/rest/...). It must be reachable from the Developer Hub backend, which must also trust its
+            TLS certificate (for a private CA set NODE_EXTRA_CA_CERTS for the Hub process). If
+            scaffolder.tibcoCallPlatformApi.allowedHosts is configured, add this host to it.
+        ccUser:
+          title: Command Center user
+          type: string
+          description: A user allowed to use the administration REST API (read access is enough). Basic authentication is used.
+        ccPassword:
+          title: Command Center password
+          type: string
+          ui:field: Secret
+          description: Kept as a scaffolder secret; never written to the repository.
+        includeIS:
+          title: Include Internet Server definitions
+          type: boolean
+          default: true
+          description: Partner users, Internet Server transfers (inbound and outbound) and the protocol listeners.
+        isHost:
+          title: Internet Server host name
+          type: string
+          description: >-
+            Host name Internet Server registered under in Command Center (the name used in
+            /admin/v7/tranferserverconfig/ftp/<host>; see Command Center, Administration, Internet Server).
+            Needed for the FTP / FTPS / SFTP listeners; leave empty to skip them.
+        httpsPort:
+          title: Internet Server HTTPS port
+          type: string
+          default: '7443'
+          description: Port of the HTTPS listener (it has no REST configuration, so it is taken from here).
+        warnDays:
+          title: Certificate warning window (days)
+          type: number
+          default: 30
+          description: Certificates expiring within this many days are tagged cert-expiring.
+
+    - title: Repository Location
+      required:
+        - scm
+        - repoUrl
+        - repoMode
+      properties:
+        scm:
+          title: Git provider
+          type: string
+          description: >-
+            Which kind of git server hosts the repository (required, no default: a wrong
+            choice produces catalog URLs the server does not understand). Needed because
+            self-hosted servers cannot be told apart by their host name.
+          enum: [github, gitlab, bitbucket-cloud, bitbucket-server, gitea]
+          enumNames:
+            - GitHub (github.com or Enterprise Server)
+            - GitLab (gitlab.com or self-hosted)
+            - Bitbucket Cloud (bitbucket.org)
+            - Bitbucket Server / Data Center
+            - Gitea / Forgejo
+        repoUrl:
+          title: Git repository for the generated catalog files
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            # Add your own git hosts here (self-hosted GitLab, Bitbucket Server, GitHub Enterprise, Gitea/Forgejo ...).
+            # Each host also needs an entry under `integrations:` in the DevHub app-config, which supplies the
+            # credentials used to clone and push.
+            allowedHosts:
+              - github.com
+              - gitlab.com
+              - bitbucket.org
+              - git.vewins.co.uk   # example self-hosted Forgejo: replace with your own host(s)
+        repoMode:
+          title: Repository
+          type: string
+          default: existing
+          enum: [existing, create]
+          enumNames:
+            - Use an existing repository (update it)
+            - Create the repository (GitHub, GitLab, Gitea / Forgejo)
+          description: >-
+            Creating needs an API token (below). It is not offered for Bitbucket, whose API cannot create an
+            initialised repository: create it there first and choose "existing".
+        branch:
+          title: Branch
+          type: string
+          default: main
+          description: >-
+            Branch to read from and to commit the generated files to. A newly created repository must use its
+            default branch. If your branch is not in the list, type its name in "Other branch" below.
+          enum: [main, master, develop, development, trunk]
+        branchOther:
+          title: Other branch (optional)
+          type: string
+          description: Exact branch name; when filled in it overrides the list above.
+        outputFolder:
+          title: Folder for the generated files
+          type: string
+          default: devhub-mft
+          description: >-
+            Created in the repository (relative to its root) and regenerated on every run, so entities for removed
+            servers and transfers disappear. Files outside it are not touched.
+      dependencies:
+        repoMode:
+          oneOf:
+            - properties:
+                repoMode:
+                  enum: [existing]
+            - properties:
+                repoMode:
+                  enum: [create]
+                repoToken:
+                  title: API token for creating the repository
+                  type: string
+                  ui:field: Secret
+                  description: >-
+                    Personal access token allowed to create repositories (GitHub: repo; GitLab: api; Gitea/Forgejo:
+                    write:repository and write:organization or write:user). Used only for creation, never stored.
+                ownerIsOrg:
+                  title: The owner is an organisation or group, not my personal account
+                  type: boolean
+                  default: false
+                repoPrivate:
+                  title: Private repository
+                  type: boolean
+                  default: true
+                repoDescription:
+                  title: Repository description
+                  type: string
+                  default: TIBCO MFT catalog entities generated by Developer Hub
+              required:
+                - repoToken
+
+    - title: Catalog details
+      required:
+        - owner
+        - system
+      properties:
+        system:
+          title: System
+          type: string
+          description: Name of the System the MFT estate belongs to, e.g. managed-file-transfer.
+        domain:
+          title: Domain (optional)
+          type: string
+          description: Domain of the System, e.g. file-exchange.
+        owner:
+          title: Owner
+          type: string
+          description: Owner of the generated entities
+          ui:field: OwnerPicker
+          ui:options:
+            allowedKinds:
+              - Group
+        lifecycle:
+          title: Lifecycle
+          type: string
+          default: production
+          enum: [experimental, production, deprecated]
+        createSystem:
+          title: Also create the System and Domain entities
+          type: boolean
+          default: false
+          description: Tick if the System/Domain do not exist in the catalog yet.
+        instance:
+          title: Instance name
+          type: string
+          default: mft
+          description: Short name of this Command Center. It prefixes every entity name (<instance>-srv-..., <instance>-is-...), so use a different one per Command Center.
+
+  # 1. Optionally create the repository (GitHub, GitLab, Gitea/Forgejo, initialised with a README)
+  # 2. Clone it
+  # 3. Read the Command Center REST API (servers, certificates, transfers, Internet Server users/listeners)
+  # 4. Generate catalog-info.yaml, a raw snapshot and a TechDocs skeleton into the output folder
+  # 5. Commit to the branch and register in the catalog
+  steps:
+    - id: createGithub
+      name: Create the GitHub Repository
+      if: ${{ parameters.repoMode == "create" and parameters.scm == "github" }}
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ "https://api.github.com" if (parameters.repoUrl | parseRepoUrl).host == "github.com" else ("https://" + (parameters.repoUrl | parseRepoUrl).host + "/api/v3") }}
+        endpoint: ${{ ("/orgs/" + (parameters.repoUrl | parseRepoUrl).owner + "/repos") if parameters.ownerIsOrg else "/user/repos" }}
+        method: POST
+        requireAuth: false
+        headers:
+          authorization: ${{ "Bearer " + secrets.repoToken }}
+          accept: application/vnd.github+json
+        body:
+          name: ${{ (parameters.repoUrl | parseRepoUrl).repo }}
+          description: ${{ parameters.repoDescription }}
+          private: ${{ parameters.repoPrivate }}
+          auto_init: true
+
+    - id: gitlabNamespace
+      name: Look up the GitLab Namespace
+      if: ${{ parameters.repoMode == "create" and parameters.scm == "gitlab" }}
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ "https://" + (parameters.repoUrl | parseRepoUrl).host + "/api/v4" }}
+        endpoint: ${{ "/namespaces/" + ((parameters.repoUrl | parseRepoUrl).owner | replace("/", "%2F")) }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Bearer " + secrets.repoToken }}
+
+    - id: createGitlab
+      name: Create the GitLab Project
+      if: ${{ parameters.repoMode == "create" and parameters.scm == "gitlab" }}
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ "https://" + (parameters.repoUrl | parseRepoUrl).host + "/api/v4" }}
+        endpoint: /projects
+        method: POST
+        requireAuth: false
+        headers:
+          authorization: ${{ "Bearer " + secrets.repoToken }}
+        body:
+          name: ${{ (parameters.repoUrl | parseRepoUrl).repo }}
+          path: ${{ (parameters.repoUrl | parseRepoUrl).repo }}
+          namespace_id: ${{ steps.gitlabNamespace.output.data.id }}
+          description: ${{ parameters.repoDescription }}
+          visibility: ${{ "private" if parameters.repoPrivate else "public" }}
+          initialize_with_readme: true
+          default_branch: ${{ (parameters.branchOther or parameters.branch) }}
+
+    - id: createGitea
+      name: Create the Gitea / Forgejo Repository
+      if: ${{ parameters.repoMode == "create" and parameters.scm == "gitea" }}
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ "https://" + (parameters.repoUrl | parseRepoUrl).host }}
+        endpoint: ${{ ("/api/v1/orgs/" + (parameters.repoUrl | parseRepoUrl).owner + "/repos") if parameters.ownerIsOrg else "/api/v1/user/repos" }}
+        method: POST
+        requireAuth: false
+        headers:
+          authorization: ${{ "token " + secrets.repoToken }}
+        body:
+          name: ${{ (parameters.repoUrl | parseRepoUrl).repo }}
+          description: ${{ parameters.repoDescription }}
+          private: ${{ parameters.repoPrivate }}
+          auto_init: true
+          default_branch: ${{ (parameters.branchOther or parameters.branch) }}
+
+    - id: clone
+      name: Clone the Repository
+      action: tibco:git:clone
+      input:
+        failOnError: true
+        branch: ${{ (parameters.branchOther or parameters.branch) }}
+        repoUrl: ${{ "https://" + (parameters.repoUrl | parseRepoUrl).host + ("/scm/" if parameters.scm == "bitbucket-server" else "/") + ((parameters.repoUrl | parseRepoUrl).workspace if parameters.scm == "bitbucket-cloud" else ((parameters.repoUrl | parseRepoUrl).project if parameters.scm == "bitbucket-server" else (parameters.repoUrl | parseRepoUrl).owner)) + "/" + (parameters.repoUrl | parseRepoUrl).repo + (".git" if parameters.scm == "bitbucket-server" else "") }}
+
+    - id: ccServers
+      name: Read Servers
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/v7/servers
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccPublicKeys
+      name: Read Stored Server Certificates
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/v7/protocolpublickeys?keyType=All&userServerFlag=Server
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccSystemKeys
+      name: Read System Keys
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/v7/protocolsystemkeys
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccPsTransfers
+      name: Read Platform Server Transfers
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admincc/v7/pstransfers
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccUsers
+      name: Read Internet Server Users
+      if: ${{ parameters.includeIS }}
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/v7/users
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsTransfers
+      name: Read Internet Server Transfers
+      if: ${{ parameters.includeIS }}
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/v7/transfers
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsFtp
+      name: Read Internet Server FTP Listener
+      if: ${{ parameters.includeIS and parameters.isHost }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/v7/tranferserverconfig/ftp/${{ parameters.isHost }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsSsh
+      name: Read Internet Server SFTP Listener
+      if: ${{ parameters.includeIS and parameters.isHost }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/v7/tranferserverconfig/ssh/${{ parameters.isHost }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccVersion
+      name: Read Version
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/v7/version
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccLicense
+      name: Read Licence
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/v7/license
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: generate
+      name: Generate Catalog Entities and Docs
+      action: fetch:template
+      input:
+        url: ./entity-skeletons-mft/
+        targetPath: ${{ parameters.outputFolder }}
+        templateFileExtension: true
+        # Re-running must regenerate the files (fetch:template skips existing files by default).
+        replace: true
+        values:
+          scm: ${{ parameters.scm }}
+          repoUrl: ${{ parameters.repoUrl }}
+          branch: ${{ (parameters.branchOther or parameters.branch) }}
+          owner: ${{ parameters.owner }}
+          system: ${{ parameters.system }}
+          domain: ${{ parameters.domain }}
+          lifecycle: ${{ parameters.lifecycle }}
+          createSystem: ${{ parameters.createSystem }}
+          outputFolder: ${{ parameters.outputFolder }}
+          instance: ${{ parameters.instance }}
+          ccUrl: ${{ parameters.ccUrl }}
+          includeIS: ${{ parameters.includeIS }}
+          isHost: ${{ parameters.isHost }}
+          httpsPort: ${{ parameters.httpsPort }}
+          warnDays: ${{ parameters.warnDays }}
+          ccDate: ${{ steps.ccServers.output.headers.date }}
+          servers: ${{ steps.ccServers.output.data }}
+          publicKeys: ${{ steps.ccPublicKeys.output.data }}
+          systemKeys: ${{ steps.ccSystemKeys.output.data }}
+          psTransfers: ${{ steps.ccPsTransfers.output.data }}
+          users: ${{ steps.ccUsers.output.data }}
+          isTransfers: ${{ steps.ccIsTransfers.output.data }}
+          isFtp: ${{ steps.ccIsFtp.output.data }}
+          isSsh: ${{ steps.ccIsSsh.output.data }}
+          version: ${{ steps.ccVersion.output.data }}
+          license: ${{ steps.ccLicense.output.data }}
+
+    - id: push
+      name: Commit the Generated Files
+      action: tibco:git:push
+      input:
+        failOnError: true
+        branch: ${{ (parameters.branchOther or parameters.branch) }}
+        commitMessage: Add catalog entities generated by the MFT import flow
+
+    - id: register
+      name: Register in the Catalog
+      action: catalog:register
+      input:
+        catalogInfoUrl: ${{ (("https://" + (parameters.repoUrl | parseRepoUrl).host + "/projects/" + ((parameters.repoUrl | parseRepoUrl).workspace if parameters.scm == "bitbucket-cloud" else ((parameters.repoUrl | parseRepoUrl).project if parameters.scm == "bitbucket-server" else (parameters.repoUrl | parseRepoUrl).owner)) + "/repos/" + (parameters.repoUrl | parseRepoUrl).repo + "/browse/" + parameters.outputFolder + "/catalog-info.yaml" + "?at=refs/heads/" + (parameters.branchOther or parameters.branch)) if parameters.scm == "bitbucket-server" else ("https://" + (parameters.repoUrl | parseRepoUrl).host + "/" + ((parameters.repoUrl | parseRepoUrl).workspace if parameters.scm == "bitbucket-cloud" else ((parameters.repoUrl | parseRepoUrl).project if parameters.scm == "bitbucket-server" else (parameters.repoUrl | parseRepoUrl).owner)) + "/" + (parameters.repoUrl | parseRepoUrl).repo + ("/blob/" if parameters.scm == "github" else ("/-/blob/" if parameters.scm == "gitlab" else ("/src/" if parameters.scm == "bitbucket-cloud" else "/src/branch/"))) + (parameters.branchOther or parameters.branch) + "/" + parameters.outputFolder + "/catalog-info.yaml")) }}
+
+  output:
+    links:
+      - title: Open in catalog (Command Center)
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}
+      - title: TIBCO MFT documentation
+        icon: catalog
+        url: https://docs.tibco.com/products/tibco-mft-platform-server

@@ -1,0 +1,84 @@
+[
+ {
+  "keyId": "KB11Q0002983",
+  "keyType": "Platform Server",
+  "userOrServerFlag": "Server",
+  "userOrServerName": "PS2-SSL",
+  "description": "public key for remote CF server PS2-SSL",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T18:03:57",
+  "encryptKeyLength": "3072",
+  "subjectDN": "CN=mft-ps2, O=Lab",
+  "keyFormat": "Certificate"
+ },
+ {
+  "keyId": "KB11Q000297B",
+  "keyType": "Platform Server",
+  "userOrServerFlag": "Server",
+  "userOrServerName": "PS2-TUNNEL",
+  "description": "public key for remote CF server PS2-TUNNEL",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T18:03:57",
+  "encryptKeyLength": "3072",
+  "subjectDN": "CN=mft-ps2, O=Lab",
+  "keyFormat": "Certificate"
+ },
+ {
+  "keyId": "KB11Q0002971",
+  "keyType": "Platform Server",
+  "userOrServerFlag": "Server",
+  "userOrServerName": "PS1-SSL",
+  "description": "public key for remote CF server PS1-SSL",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T18:03:37",
+  "encryptKeyLength": "3072",
+  "subjectDN": "CN=mft-ps1, O=Lab",
+  "keyFormat": "Certificate"
+ },
+ {
+  "keyId": "KB11Q0002969",
+  "keyType": "Platform Server",
+  "userOrServerFlag": "Server",
+  "userOrServerName": "PS1-TUNNEL",
+  "description": "public key for remote CF server PS1-TUNNEL",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T18:03:37",
+  "encryptKeyLength": "3072",
+  "subjectDN": "CN=mft-ps1, O=Lab",
+  "keyFormat": "Certificate"
+ },
+ {
+  "keyId": "KB11Q00028CD",
+  "keyType": "HTTPS",
+  "userOrServerFlag": "Server",
+  "userOrServerName": "PARTNER-HTTPS",
+  "description": "public key for remote http server PARTNER-HTTPS",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T17:56:38",
+  "encryptKeyLength": "3072",
+  "subjectDN": "CN=mft-partner-https, O=Lab",
+  "keyFormat": "Certificate"
+ },
+ {
+  "keyId": "KB11Q00028C5",
+  "keyType": "FTP",
+  "userOrServerFlag": "Server",
+  "userOrServerName": "PARTNER-FTPS",
+  "description": "public key for remote ftp server PARTNER-FTPS",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T17:56:35",
+  "encryptKeyLength": "3072",
+  "subjectDN": "CN=mft-partner-ftps, O=Lab",
+  "keyFormat": "Certificate"
+ },
+ {
+  "keyId": "KB11Q000286E",
+  "keyType": "SSH",
+  "userOrServerFlag": "Server",
+  "userOrServerName": "PARTNER-SFTP",
+  "description": "public key for remote ssh server PARTNER-SFTP",
+  "keyStatus": "Enabled",
+  "encryptKeyLength": "3072",
+  "keyFormat": "Key"
+ }
+]

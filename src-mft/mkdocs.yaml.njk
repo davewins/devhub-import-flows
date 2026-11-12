@@ -1,0 +1,10 @@
+{#@@ANALYSIS@@#}
+site_name: ${{ ("MFT " + inst) | dump }}
+site_description: ${{ ("Documentation generated from the Command Center export of " + inst) | dump }}
+nav:
+  - Overview: index.md
+  - Findings: findings.md
+  - Certificates: certificates.md
+  - Transfers: transfers.md
+plugins:
+  - techdocs-core

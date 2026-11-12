@@ -1,0 +1,12 @@
+{#@@ANALYSIS@@#}
+# Certificates
+
+| Type | Kind | Name | Expires | Status |
+|---|---|---|---|---|
+{%- for c in certRows %}
+| ${{ c.type }} | ${{ c.kind }} | ${{ c.label }} | ${{ (c.expires | truncate(10, true, "")) if c.expires != "" else "none recorded" }} | ${{ c.st if c.st != "" else "ok" }} |
+{%- endfor %}
+
+`stored` = the server certificate Command Center pinned for a partner or Platform Server; `system` = Command Center / Internet Server
+own key; `probed` = read from a live TLS handshake during the export (the Internet Server HTTPS keystore is not exposed by REST).
+Platform Server connections trust the *stored* certificate: when the remote side renews its certificate the stored one must be refreshed.

@@ -1,0 +1,15 @@
+{
+ "hostName": "tibco-mft.lab.local",
+ "enabled": "Yes",
+ "ipPort": "2121",
+ "tlsIPPort": "2990",
+ "ftpSystemKey": "Use Default",
+ "welcomeMessage": "MFT lab FTP/FTPS",
+ "clearCommandChannel": "No",
+ "sslOnlyConnections": "No",
+ "useExternalIPAddress": "No",
+ "externalIPAddress": "127.0.0.1;::1",
+ "PORTEPRTAllowed": "Yes",
+ "portChecking": "None",
+ "pasvChecking": "None"
+}

@@ -277,3 +277,47 @@ and pull requests are welcome.
 Apache License 2.0, see `LICENSE`. `import-flow-bw6-forgejo.yaml` is adapted from TIBCO's Apache-2.0 example,
 see `NOTICE`. This is an independent community project, not made, endorsed or supported by TIBCO / Cloud
 Software Group. TIBCO, BusinessWorks and BWCE are trademarks of Cloud Software Group, Inc.
+
+## MFT import flow (`import-flow-mft.yaml`)
+
+Imports a TIBCO MFT estate (Command Center, Internet Server, Platform Server) into the catalog. Same clone → generate →
+push → register pattern as the BusinessWorks flows, with two differences: the source is a **live Command Center**, and the
+target repository can be **created or updated**.
+
+1. **Command Center page**: URL, user and password (a scaffolder secret, never written anywhere), whether to include
+   Internet Server definitions, the Internet Server host name (for the FTP / FTPS / SFTP listeners), HTTPS port, warning window.
+2. **Repository page**: git provider (GitHub, GitLab, Bitbucket Cloud, Bitbucket Server / Data Center, Gitea / Forgejo; cloud or
+   self-hosted), repository, branch, output folder, and **Use an existing repository (update it)** or **Create the repository**.
+   Creating needs an API token (a secret used for the one call) and works for GitHub (user or organisation), GitLab (user or
+   group) and Gitea / Forgejo (user or organisation); the repository is initialised with a README so the branch exists.
+   It is not offered for Bitbucket, whose API cannot create an initialised repository: create it there, then choose *existing*.
+3. The flow reads the REST API with `tibco:call-platform-api` (basic authentication), writes `catalog-info.yaml`, TechDocs pages
+   and a raw `snapshot.json` of the API responses into the output folder, commits and pushes (`tibco:git:clone` / `tibco:git:push`,
+   credentials from the Hub's `integrations:`), and registers the catalog file. Re-running regenerates the folder: entity names
+   are `<instance>-<kind>-<id>`, so existing entities are updated and removed servers/transfers disappear.
+
+| Generated from | Entity |
+|---|---|
+| the Command Center | **Component** `mft-command-center` (version, licence expiry, TechDocs) |
+| Server definitions (Platform Server, FTP/FTPS, SFTP, HTTP, ...) | **Resource** `mft-server`; tags for protocol and security, `insecure-transport` when no TLS |
+| Internet Server FTP / FTPS / SFTP / HTTPS listeners | **Resource** `mft-protocol-endpoint` |
+| Internet Server partner users | **Resource** `mft-partner-user`, depends on the endpoints their allowed protocols permit |
+| system keys and stored server certificates | **Resource** `certificate`, `mft/cert-expires`, `mft/cert-days-left`-style findings, tags `cert-expiring` / `cert-expired` |
+| Platform Server transfers; Internet Server transfers (inbound `*LOCAL`, outbound to a partner) | **Component** `file-transfer`, depends on servers / endpoints / users; earliest certificate expiry on the transfer |
+| everything | **TechDocs**: overview, findings (clear text, expiring certificates, licence), certificates, transfers |
+
+Requirements and limits:
+
+* The Hub backend must reach the Command Center and trust its TLS certificate (private CA: set `NODE_EXTRA_CA_CERTS` for the Hub
+  process). If `scaffolder.tibcoCallPlatformApi.allowedHosts` is configured, add the Command Center host to it.
+* "Today" for certificate status comes from the `Date` header of the Command Center response (templates have no clock).
+* The Internet Server HTTPS certificate is only in the Tomcat keystore, so its expiry is not tracked (reported as a finding);
+  nor are live TLS probes of partners done (an outbound partner whose served certificate differs from the pinned one is not detected).
+* Not covered yet: other transfer families (scheduled jobs, AS2, OFTP2, JMS, PGP), audit / live status.
+* The optional steps (version, licence, FTP and SFTP listener) use `continueOnError`.
+* Create-repository calls were written from the providers' API documentation and have not been run against live servers.
+
+Offline test with saved REST responses (`fixtures/mft-lab-rest/`, Command Center 8.7.1.8):
+`cd tools && npm i && STRICT=1 FLOW=import-flow-mft.yaml MFT_FIXTURES=../fixtures/mft-lab-rest node simulate.mjs ../fixtures/empty params.mft.example.json ..`
+(`MFT_DATE` overrides the response date). Sources are in `src-mft/`, built into `entity-skeletons-mft/` by
+`node tools/build-skeleton.mjs mft`.

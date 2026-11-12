@@ -1,0 +1,17 @@
+{#@@ANALYSIS@@#}
+# Findings (${{ findings.length }})
+
+Derived from the export of ${{ nowIso }}. Certificates are flagged when they expire within ${{ warnDays }} days or have expired.
+Entities carrying these problems are tagged `insecure-transport`, `cert-expiring`, `cert-expired` or `cert-mismatch`.
+
+| Severity | Entity | Finding |
+|---|---|---|
+{%- for sev in ["high", "medium", "low"] %}
+{%- for f in findings %}{%- if f.sev == sev %}
+| ${{ f.sev }} | ${{ f.entity }} | ${{ f.text | replace("|", "/") }} |
+{%- endif %}{%- endfor %}
+{%- endfor %}
+{%- if findings.length == 0 %}
+
+No findings.
+{%- endif %}

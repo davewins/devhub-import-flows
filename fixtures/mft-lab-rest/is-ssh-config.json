@@ -1,0 +1,7 @@
+{
+ "hostName": "tibco-mft.lab.local",
+ "enabled": "Yes",
+ "ipPort": "2222",
+ "sshSystemKey": "Use Default",
+ "welcomeMessage": "MFT lab SFTP"
+}

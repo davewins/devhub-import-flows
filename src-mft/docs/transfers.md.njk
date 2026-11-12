@@ -1,0 +1,18 @@
+{#@@ANALYSIS@@#}
+# Transfers
+
+## Platform Server
+
+| Transfer | Direction | Initiator | Responder | SSL | Hold | Source | Destination |
+|---|---|---|---|---|---|---|---|
+{%- for t in pts %}
+| ${{ t.id }} | ${{ t.dir }} | ${{ t.ini }} | ${{ t.respHost }}:${{ t.respPort }} | ${{ t.ssl }} | ${{ t.hold }} | ${{ t.src }} | ${{ t.respFile }} |
+{%- endfor %}
+
+## Internet Server
+
+| Transfer | Direction | Kind | User | Server | Path | Protocols |
+|---|---|---|---|---|---|---|
+{%- for t in its %}
+| ${{ t.id }} | ${{ t.dir }} | ${{ "outbound" if t.outbound else "inbound" }} | ${{ t.user }} | ${{ t.server }} | ${{ t.path }} | ${{ t.prot }} |
+{%- endfor %}

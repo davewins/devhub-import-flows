@@ -1,0 +1,16 @@
+{#- Raw Command Center REST responses this run was generated from (no credentials; the API never returns passwords). -#}
+{
+  "instance": ${{ values.instance | dump }},
+  "ccUrl": ${{ values.ccUrl | dump }},
+  "ccDate": ${{ (values.ccDate or "") | dump }},
+  "version": ${{ (values.version or {}) | dump }},
+  "license": ${{ (values.license or {}) | dump }},
+  "servers": ${{ (values.servers or []) | dump }},
+  "publicKeys": ${{ (values.publicKeys or []) | dump }},
+  "systemKeys": ${{ (values.systemKeys or []) | dump }},
+  "psTransfers": ${{ (values.psTransfers or []) | dump }},
+  "users": ${{ (values.users or []) | dump }},
+  "isTransfers": ${{ (values.isTransfers or []) | dump }},
+  "isFtp": ${{ (values.isFtp or {}) | dump }},
+  "isSsh": ${{ (values.isSsh or {}) | dump }}
+}

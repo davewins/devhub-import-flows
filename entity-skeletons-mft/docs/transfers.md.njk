@@ -1,0 +1,191 @@
+{#- Derives entity names, links, tags, expiry and findings from the Command Center REST responses (values.servers etc.).
+    (((inst + "-" + "kind" + "-" + (expr)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")) and ((expr) | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+|-+$/g, "")) are expanded by tools/build-skeleton.mjs. Pure data: nothing secret is read. -#}
+{%- macro isoDays(iso) -%}
+{%- set p = iso.split("-") -%}
+{%- set m = p[1] | int -%}{%- set d = p[2].split("T")[0] | int -%}
+{%- set y = (p[0] | int) - 1 if m <= 2 else (p[0] | int) -%}
+{%- set era = y // 400 -%}{%- set yoe = y - era * 400 -%}
+{%- set doy = (153 * ((m + 9) % 12) + 2) // 5 + d - 1 -%}
+${{ era * 146097 + yoe * 365 + yoe // 4 - yoe // 100 + doy }}
+{%- endmacro -%}
+{%- set r = values.repoUrl | parseRepoUrl -%}
+{%- set scm = values.scm -%}
+{%- set ns = r.workspace if scm == "bitbucket-cloud" else (r.project if scm == "bitbucket-server" else r.owner) -%}
+{%- set webBase = ("https://" + r.host + "/projects/" + ns + "/repos/" + r.repo) if scm == "bitbucket-server" else ("https://" + r.host + "/" + ns + "/" + r.repo) -%}
+{%- set treeSuf = ("?at=refs/heads/" + values.branch) if scm == "bitbucket-server" else "" -%}
+{%- if scm == "github" -%}{%- set treePre = webBase + "/tree/" + values.branch + "/" -%}
+{%- elif scm == "gitlab" -%}{%- set treePre = webBase + "/-/tree/" + values.branch + "/" -%}
+{%- elif scm == "bitbucket-cloud" -%}{%- set treePre = webBase + "/src/" + values.branch + "/" -%}
+{%- elif scm == "bitbucket-server" -%}{%- set treePre = webBase + "/browse/" -%}
+{%- else -%}{%- set treePre = webBase + "/src/branch/" + values.branch + "/" -%}{%- endif -%}
+{%- set inst = values.instance if values.instance else "mft" -%}
+{%- set ccName = (inst + "-command-center") | lower | replace(r/[^a-z0-9_.-]+/g, "-") | truncate(63, true, "") -%}
+{%- set ccUrl = values.ccUrl if values.ccUrl else "" -%}
+{%- set ccVersion = ((values.version.message if values.version else "") | default("")) | trim -%}
+{%- set warnDays = (values.warnDays | int) if values.warnDays else 30 -%}
+{#- "now" comes from the Date header of the Command Center response (Wed, 11 Nov 2026 18:08:07 GMT): templates have no clock -#}
+{%- set months = { "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05", "Jun": "06", "Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12" } -%}
+{%- set dparts = values.ccDate.split(" ") if values.ccDate else [] -%}
+{%- set nowOk = dparts.length >= 5 and months[dparts[2]] -%}
+{%- set nowIso = (dparts[3] + "-" + months[dparts[2]] + "-" + dparts[1]) if nowOk else "" -%}
+{%- set nowDn = (isoDays(nowIso) | int) if nowOk else 0 -%}
+{%- set protoMap = { "all": "ftp ftps sftp https", "ftp": "ftp ftps", "secure": "ftps sftp https", "https": "https", "ssh": "sftp", "sftp": "sftp", "ftps": "ftps" } -%}
+{%- set findings = [] -%}
+{#- ---- licence ---- -#}
+{%- set licExp = "" -%}{%- set licDl = 0 -%}
+{%- if values.license and values.license.licenseExpirationDate -%}
+  {%- set lp = values.license.licenseExpirationDate.split(" ") -%}
+  {%- if lp.length >= 6 and months[lp[1]] -%}{%- set licExp = lp[5] + "-" + months[lp[1]] + "-" + lp[2] -%}{%- set licDl = (isoDays(licExp) | int) - nowDn -%}{%- endif -%}
+{%- endif -%}
+{#- ---- certificates ---- -#}
+{%- set certRows = [] -%}
+{%- set allKeys = [] -%}
+{%- for k in (values.systemKeys or []) -%}{%- set _ = allKeys.push({ "k": k, "kind": "system" }) -%}{%- endfor -%}
+{%- for k in (values.publicKeys or []) -%}{%- set _ = allKeys.push({ "k": k, "kind": "stored" }) -%}{%- endfor -%}
+{%- for a in allKeys -%}
+  {%- set k = a.k -%}
+  {%- set e = k.keyExpirationDate | default("") -%}
+  {%- set dl = ((isoDays(e) | int) - nowDn) if (e != "" and nowOk) else 0 -%}
+  {%- set st = "" -%}
+  {%- if e != "" and nowOk and dl < 0 -%}{%- set st = "expired" -%}{%- elif e != "" and nowOk and dl <= warnDays -%}{%- set st = "expiring" -%}{%- endif -%}
+  {%- set owner = (k.userOrServerName | default("")) if a.kind == "stored" else "" -%}
+  {%- set label = k.alias if k.alias else (owner if owner != "" else k.keyId) -%}
+  {%- set tags = ["certificate", ((k.keyType) | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+|-+$/g, ""))] -%}
+  {%- if st != "" -%}{%- set _ = tags.push("cert-" + st) -%}{%- endif -%}
+  {%- if e == "" -%}{%- set _ = tags.push("no-expiry-recorded") -%}{%- endif -%}
+  {%- set _ = certRows.push({ "id": k.keyId, "name": (((inst + "-" + "cert" + "-" + (k.keyId)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "type": k.keyType, "kind": a.kind, "owner": owner, "label": label, "expires": e, "dl": dl, "st": st, "tags": tags, "subject": k.subjectDN | default(""), "issuer": k.issuerName | default(""), "isDefault": k.defaultKeyFlag == "Yes", "desc": k.description | default("") }) -%}
+  {%- if st != "" -%}{%- set _ = findings.push({ "sev": "high" if st == "expired" else "medium", "entity": (((inst + "-" + "cert" + "-" + (k.keyId)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "text": k.keyType + " certificate " + label + (" EXPIRED " if st == "expired" else " expires ") + (e | truncate(10, true, "")) + " (" + (dl | string) + " days)" }) -%}{%- endif -%}
+{%- endfor -%}
+{#- ---- servers ---- -#}
+{%- set svs = [] -%}
+{%- for s in (values.servers or []) -%}
+  {%- if s.serverType != "LOCAL" -%}
+    {%- set n = s.serverName -%}{%- set typ = s.serverType -%}
+    {%- set sec = (s.psConnectionSecurityType | default("")) if typ == "Platform Server" else ((s.ftpConnectionSecurityType | default("")) if typ == "FTP" else (("TLS" if (s.ipAddressOrName | default("")).split("https:").length > 1 else "None") if typ == "HTTP" else ("SSH" if typ == "SSH" else ""))) -%}
+    {%- set clientType = "Platform Server" if (typ == "Platform Server" and s.psSystemKey and s.psSystemKey != "None") else ("FTP" if (typ == "FTP" and sec != "" and sec != "None") else "") -%}
+    {%- set deps = [] -%}{%- set exps = [] -%}{%- set dls = [] -%}
+    {%- for c in certRows -%}
+      {%- if (c.kind == "stored" and c.owner == n) or (c.kind == "system" and c.isDefault and clientType != "" and c.type == clientType) -%}
+        {%- set _ = deps.push("resource:default/" + c.name) -%}
+        {%- if c.expires != "" -%}{%- if exps.length == 0 -%}{%- set _ = exps.push(c.expires) -%}{%- set _ = dls.push(c.dl) -%}{%- elif c.dl < dls[0] -%}{%- set _ = exps.pop() -%}{%- set _ = dls.pop() -%}{%- set _ = exps.push(c.expires) -%}{%- set _ = dls.push(c.dl) -%}{%- endif -%}{%- endif -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- set exp = exps[0] if exps.length > 0 else "" -%}{%- set dl = dls[0] if dls.length > 0 else 0 -%}
+    {%- set st = "" -%}
+    {%- if exp != "" and nowOk and dl < 0 -%}{%- set st = "expired" -%}{%- elif exp != "" and nowOk and dl <= warnDays -%}{%- set st = "expiring" -%}{%- endif -%}
+    {%- set tags = ["mft-server", ((typ) | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+|-+$/g, ""))] -%}
+    {%- if sec != "" -%}{%- set _ = tags.push(((sec) | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+|-+$/g, ""))) -%}{%- endif -%}
+    {%- set insecure = (sec == "None" and (typ == "Platform Server" or typ == "FTP" or typ == "HTTP")) -%}
+    {%- if insecure -%}{%- set _ = tags.push("insecure-transport") -%}{%- set _ = findings.push({ "sev": "medium", "entity": (((inst + "-" + "srv" + "-" + (n)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "text": "Server " + n + " (" + typ + ") is defined without transport security" }) -%}{%- endif -%}
+    {%- if typ == "SSH" -%}{%- set _ = tags.push("sftp") -%}{%- endif -%}
+    {%- if s.disableFlag == "Yes" -%}{%- set _ = tags.push("disabled") -%}{%- endif -%}
+    {%- if st != "" -%}{%- set _ = tags.push("cert-" + st) -%}{%- endif -%}
+    {%- if exps.length == 0 and typ != "SSH" and sec != "None" and sec != "" -%}{%- set _ = findings.push({ "sev": "low", "entity": (((inst + "-" + "srv" + "-" + (n)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "text": "No stored certificate found for " + n + "; expiry unknown" }) -%}{%- endif -%}
+    {%- set _ = svs.push({ "name": (((inst + "-" + "srv" + "-" + (n)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "n": n, "typ": typ, "sec": sec, "addr": s.ipAddressOrName | default(""), "port": s.ipPort | default("") | string, "desc": s.description | default(""), "good": s.ServerStatusGoodCount | default(""), "fail": s.ServerStatusFailCount | default(""), "deps": deps, "exp": exp, "dl": dl, "tags": tags, "insecure": insecure }) -%}
+  {%- endif -%}
+{%- endfor -%}
+{#- ---- internet server protocol endpoints ---- -#}
+{%- set eps = [] -%}
+{%- if values.isHost -%}
+  {%- set h = values.isHost -%}
+  {%- set defs = [] -%}
+  {%- if values.isFtp and values.isFtp.enabled == "Yes" -%}
+    {%- if values.isFtp.sslOnlyConnections != "Yes" -%}{%- set _ = defs.push({ "proto": "ftp", "port": values.isFtp.ipPort | string, "key": "", "ccc": "" }) -%}{%- endif -%}
+    {%- if values.isFtp.tlsIPPort and (values.isFtp.tlsIPPort | string) != "0" -%}{%- set _ = defs.push({ "proto": "ftps", "port": values.isFtp.tlsIPPort | string, "key": "FTP", "ccc": values.isFtp.clearCommandChannel }) -%}{%- endif -%}
+  {%- endif -%}
+  {%- if values.isSsh and values.isSsh.enabled == "Yes" -%}{%- set _ = defs.push({ "proto": "sftp", "port": values.isSsh.ipPort | string, "key": "SSH", "ccc": "" }) -%}{%- endif -%}
+  {%- if values.includeIS != false -%}{%- set _ = defs.push({ "proto": "https", "port": values.httpsPort | default("7443") | string, "key": "", "ccc": "" }) -%}{%- endif -%}
+  {%- for d in defs -%}
+    {%- set pr = d.proto -%}
+    {%- set e = "" -%}{%- set dl = 0 -%}{%- set cid = "" -%}
+    {%- if d.key != "" -%}{%- for c in certRows -%}{%- if c.kind == "system" and c.isDefault and c.type == d.key -%}{%- set e = c.expires -%}{%- set dl = c.dl -%}{%- set cid = c.id -%}{%- endif -%}{%- endfor -%}{%- endif -%}
+    {%- set st = "" -%}
+    {%- if e != "" and nowOk and dl < 0 -%}{%- set st = "expired" -%}{%- elif e != "" and nowOk and dl <= warnDays -%}{%- set st = "expiring" -%}{%- endif -%}
+    {%- set tags = ["mft-protocol-endpoint", pr] -%}
+    {%- if pr == "ftp" -%}{%- set _ = tags.push("insecure-transport") -%}{%- set _ = tags.push("clear-ftp") -%}{%- set _ = findings.push({ "sev": "medium", "entity": (((inst + "-" + "ep" + "-" + (h + "-" + pr)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "text": "Plain (clear-text) FTP listener enabled on " + h + ":" + d.port }) -%}{%- endif -%}
+    {%- if d.ccc == "Yes" -%}{%- set _ = tags.push("clear-command-channel") -%}{%- set _ = findings.push({ "sev": "medium", "entity": (((inst + "-" + "ep" + "-" + (h + "-" + pr)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "text": "FTPS on " + h + " allows a clear command channel" }) -%}{%- endif -%}
+    {%- if st != "" -%}{%- set _ = tags.push("cert-" + st) -%}{%- endif -%}
+    {%- if pr == "https" -%}{%- set _ = findings.push({ "sev": "low", "entity": (((inst + "-" + "ep" + "-" + (h + "-" + pr)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "text": "HTTPS listener " + h + ":" + d.port + ": the certificate lives in the Tomcat keystore, not in REST, so its expiry is not tracked" }) -%}{%- endif -%}
+    {%- set _ = eps.push({ "name": (((inst + "-" + "ep" + "-" + (h + "-" + pr)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "host": h, "proto": pr, "port": d.port, "insecure": pr == "ftp", "exp": e, "dl": dl, "certId": cid, "tags": tags }) -%}
+  {%- endfor -%}
+{%- endif -%}
+{#- ---- partner users ---- -#}
+{%- set uss = [] -%}
+{%- for u in (values.users or []) -%}
+  {%- if u.userType != "Non-File Share User" and u.userType != "Power User" -%}
+    {%- set prot = (u.clientProtocolsAllowed | default("")) -%}
+    {%- set allowed = (protoMap[prot | lower] or "").split(" ") -%}
+    {%- set deps = [] -%}
+    {%- for ep in eps -%}{%- if ep.proto in allowed -%}{%- set _ = deps.push("resource:default/" + ep.name) -%}{%- endif -%}{%- endfor -%}
+    {%- set tags = ["mft-user"] -%}
+    {%- for a in allowed -%}{%- if a != "" -%}{%- set _ = tags.push(a) -%}{%- endif -%}{%- endfor -%}
+    {%- if "ftp" in allowed -%}{%- set _ = tags.push("insecure-transport") -%}{%- set _ = findings.push({ "sev": "medium", "entity": (((inst + "-" + "user" + "-" + (u.userId)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "text": "User " + u.userId + " may connect with clear FTP (clientProtocolsAllowed=" + prot + ")" }) -%}{%- endif -%}
+    {%- if u.disableUser == "Yes" or u.lockUser == "Yes" -%}{%- set _ = tags.push("disabled") -%}{%- endif -%}
+    {%- set _ = uss.push({ "id": u.userId, "name": (((inst + "-" + "user" + "-" + (u.userId)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "full": u.fullName | default(""), "type": u.userType, "prot": prot, "allowed": allowed, "last": u.dateLastAccess | default(""), "ip": u.restrictedIPAddress | default(""), "deps": deps, "tags": tags }) -%}
+  {%- endif -%}
+{%- endfor -%}
+{#- ---- Platform Server transfers ---- -#}
+{%- set pts = [] -%}
+{%- for t in (values.psTransfers or []) -%}
+  {%- set ini = t.PServerName | default("") -%}{%- set rs = "" -%}
+  {%- for s in values.servers -%}{%- if s.serverType == "Platform Server" and s.ipAddressOrName == t.ResponderHostName and (s.ipPort | string) == (t.ResponderPortNumber | string) -%}{%- set rs = s.serverName -%}{%- endif -%}{%- endfor -%}
+  {%- set ssl = t.UsingSSL | default("No") -%}{%- set pdir = t.TransferDirection | default("unknown") -%}
+  {%- set deps = [] -%}{%- set exps = [] -%}{%- set dls = [] -%}
+  {%- for sv in svs -%}{%- if sv.n == ini or (sv.n == rs and rs != ini) -%}{%- set _ = deps.push("resource:default/" + sv.name) -%}
+    {%- if sv.exp != "" and ssl != "No" -%}{%- if exps.length == 0 -%}{%- set _ = exps.push(sv.exp) -%}{%- set _ = dls.push(sv.dl) -%}{%- elif sv.dl < dls[0] -%}{%- set _ = exps.pop() -%}{%- set _ = dls.pop() -%}{%- set _ = exps.push(sv.exp) -%}{%- set _ = dls.push(sv.dl) -%}{%- endif -%}{%- endif -%}
+  {%- endif -%}{%- endfor -%}
+  {%- set exp = exps[0] if exps.length > 0 else "" -%}{%- set dl = dls[0] if dls.length > 0 else 0 -%}
+  {%- set st = "" -%}
+  {%- if exp != "" and nowOk and dl < 0 -%}{%- set st = "expired" -%}{%- elif exp != "" and nowOk and dl <= warnDays -%}{%- set st = "expiring" -%}{%- endif -%}
+  {%- set tags = ["file-transfer", "platform-server", ((pdir) | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+|-+$/g, ""))] -%}
+  {%- if ssl == "No" -%}{%- set _ = tags.push("insecure-transport") -%}{%- set _ = findings.push({ "sev": "medium", "entity": (((inst + "-" + "ps" + "-" + (t.TransferID)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "text": "Transfer " + t.TransferID + " (" + ini + " to " + t.ResponderHostName + ":" + (t.ResponderPortNumber | string) + ") is sent without SSL/TLS" }) -%}
+  {%- else -%}{%- set _ = tags.push("implicit-ssl" if ssl == "Yes" else ((ssl) | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+|-+$/g, ""))) -%}{%- endif -%}
+  {%- if t.Hold == "Yes" -%}{%- set _ = tags.push("held") -%}{%- endif -%}
+  {%- if st != "" -%}{%- set _ = tags.push("cert-" + st) -%}{%- endif -%}
+  {%- set _ = pts.push({ "id": t.TransferID, "name": (((inst + "-" + "ps" + "-" + (t.TransferID)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "desc": t.Description | default(""), "dir": t.TransferDirection | default(""), "ini": ini, "src": t.InitiatorFileName | default(""), "respHost": t.ResponderHostName | default(""), "respPort": t.ResponderPortNumber | default("") | string, "respFile": t.Responder_FileName_Command | default(""), "ssl": ssl, "enc": t.EncryptionMethod | default(""), "comp": t.DefaultCompression | default(""), "hold": t.Hold | default("No"), "last": t.DateLastProcessed | default(""), "deps": deps, "exp": exp, "dl": dl, "tags": tags }) -%}
+{%- endfor -%}
+{#- ---- Internet Server transfers (inbound *LOCAL, outbound to a partner server) ---- -#}
+{%- set its = [] -%}
+{%- for t in (values.isTransfers or []) -%}
+  {%- set idir = t.transferDirection | default("unknown") -%}{%- set srvn = t.serverName | default("") -%}{%- set outbound = (srvn != "*LOCAL" and srvn != "") -%}
+  {%- set deps = [] -%}{%- set exps = [] -%}{%- set dls = [] -%}
+  {%- set tags = ["file-transfer", "internet-server", "outbound" if outbound else "inbound", ((idir) | lower | replace(r/[^a-z0-9]+/g, "-") | replace(r/^-+|-+$/g, ""))] -%}
+  {%- if outbound -%}
+    {%- for sv in svs -%}{%- if sv.n == srvn -%}{%- set _ = deps.push("resource:default/" + sv.name) -%}{%- if sv.exp != "" -%}{%- set _ = exps.push(sv.exp) -%}{%- set _ = dls.push(sv.dl) -%}{%- endif -%}{%- if sv.insecure -%}{%- set _ = tags.push("insecure-transport") -%}{%- endif -%}{%- endif -%}{%- endfor -%}
+  {%- else -%}
+    {%- set allowed = (protoMap[(t.clientProtocolsAllowed | default("")) | lower] or "").split(" ") -%}
+    {%- for us in uss -%}{%- if us.id == t.authorizedUserId -%}{%- set allowed = us.allowed -%}{%- endif -%}{%- endfor -%}
+    {%- set clear = [] -%}
+    {%- for ep in eps -%}{%- if ep.proto in allowed -%}{%- set _ = deps.push("resource:default/" + ep.name) -%}
+      {%- if ep.exp != "" -%}{%- if exps.length == 0 -%}{%- set _ = exps.push(ep.exp) -%}{%- set _ = dls.push(ep.dl) -%}{%- elif ep.dl < dls[0] -%}{%- set _ = exps.pop() -%}{%- set _ = dls.pop() -%}{%- set _ = exps.push(ep.exp) -%}{%- set _ = dls.push(ep.dl) -%}{%- endif -%}{%- endif -%}
+      {%- if ep.insecure -%}{%- set _ = clear.push(ep.name) -%}{%- endif -%}
+    {%- endif -%}{%- endfor -%}
+    {%- if clear.length > 0 -%}{%- set _ = tags.push("insecure-transport") -%}{%- endif -%}
+  {%- endif -%}
+  {%- for us in uss -%}{%- if us.id == t.authorizedUserId -%}{%- set _ = deps.push("resource:default/" + us.name) -%}{%- endif -%}{%- endfor -%}
+  {%- set exp = exps[0] if exps.length > 0 else "" -%}{%- set dl = dls[0] if dls.length > 0 else 0 -%}
+  {%- set st = "" -%}
+  {%- if exp != "" and nowOk and dl < 0 -%}{%- set st = "expired" -%}{%- elif exp != "" and nowOk and dl <= warnDays -%}{%- set st = "expiring" -%}{%- endif -%}
+  {%- if st != "" -%}{%- set _ = tags.push("cert-" + st) -%}{%- endif -%}
+  {%- if t.disableFlag == "Yes" -%}{%- set _ = tags.push("disabled") -%}{%- endif -%}
+  {%- set _ = its.push({ "id": t.transferId, "name": (((inst + "-" + "is" + "-" + (t.transferId)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")), "desc": t.description | default(""), "dir": t.transferDirection | default(""), "user": t.authorizedUserId | default(""), "group": t.authorizedGroupId | default(""), "server": srvn, "path": t.serverFileName | default(""), "prot": t.clientProtocolsAllowed | default(""), "oneTime": t.oneTimeFlag | default(""), "last": t.dateLastProcessed | default(""), "deps": deps, "exp": exp, "dl": dl, "tags": tags, "outbound": outbound }) -%}
+{%- endfor -%}
+{%- if licExp != "" and nowOk and licDl <= warnDays -%}{%- set _ = findings.push({ "sev": "high" if licDl < 0 else "medium", "entity": ccName, "text": "MFT licence " + ("EXPIRED " if licDl < 0 else "expires ") + licExp + " (" + (licDl | string) + " days)" }) -%}{%- endif -%}
+{%- if not nowOk -%}{%- set _ = findings.push({ "sev": "low", "entity": ccName, "text": "The Command Center response had no usable Date header, so certificate expiry status could not be evaluated (expiry dates are still shown)" }) -%}{%- endif -%}
+# Transfers
+
+## Platform Server
+
+| Transfer | Direction | Initiator | Responder | SSL | Hold | Source | Destination |
+|---|---|---|---|---|---|---|---|
+{%- for t in pts %}
+| ${{ t.id }} | ${{ t.dir }} | ${{ t.ini }} | ${{ t.respHost }}:${{ t.respPort }} | ${{ t.ssl }} | ${{ t.hold }} | ${{ t.src }} | ${{ t.respFile }} |
+{%- endfor %}
+
+## Internet Server
+
+| Transfer | Direction | Kind | User | Server | Path | Protocols |
+|---|---|---|---|---|---|---|
+{%- for t in its %}
+| ${{ t.id }} | ${{ t.dir }} | ${{ "outbound" if t.outbound else "inbound" }} | ${{ t.user }} | ${{ t.server }} | ${{ t.path }} | ${{ t.prot }} |
+{%- endfor %}

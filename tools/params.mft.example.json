@@ -1,0 +1,29 @@
+{
+ "ccUrl": "https://tibco-mft.lab.local:8443",
+ "ccUser": "admin",
+ "ccPassword": "x",
+ "includeIS": true,
+ "isHost": "tibco-mft.lab.local",
+ "httpsPort": "7443",
+ "warnDays": 30,
+ "scm": "gitea",
+ "repoUrl": "git.vewins.co.uk?owner=dave&repo=mft-lab-catalog",
+ "repoMode": "create",
+ "repoToken": "t",
+ "ownerIsOrg": false,
+ "repoPrivate": true,
+ "repoDescription": "d",
+ "branch": "main",
+ "branchOther": "",
+ "outputFolder": "devhub-mft",
+ "system": "managed-file-transfer",
+ "domain": "",
+ "owner": "group:default/mft-admins",
+ "lifecycle": "production",
+ "createSystem": true,
+ "instance": "mft-lab",
+ "_secrets": {
+  "ccPassword": "pw",
+  "repoToken": "tok"
+ }
+}

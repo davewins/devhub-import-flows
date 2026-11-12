@@ -17,7 +17,7 @@ import * as cm from '@backstage/catalog-model';
 const [, , projectDir, paramsFile, templateDir = '..'] = process.argv;
 if (!projectDir || !paramsFile) { console.error('usage: node simulate.mjs <bw-project-dir> <params.json> [template-dir]'); process.exit(2); }
 const params = JSON.parse(fs.readFileSync(paramsFile, 'utf8'));
-const tpl = yaml.parse(fs.readFileSync(path.join(templateDir, 'import-flow-bw-deep.yaml'), 'utf8'));
+const tpl = yaml.parse(fs.readFileSync(path.join(templateDir, process.env.FLOW || 'import-flow-bw-deep.yaml'), 'utf8'));
 
 
 // STRICT=1 emulates what newer Hub builds appear to allow on strings in templates: only replace / split / length.
@@ -40,10 +40,11 @@ const parseRepoUrl = s => {
 const mkEnv = (loader) => {
   const env = new nunjucks.Environment(loader, { autoescape: false, tags: { variableStart: '${{', variableEnd: '}}' } });
   env.addFilter('parseRepoUrl', parseRepoUrl);
+  env.addFilter('encodeBase64', (...a) => Buffer.from(a.join('')).toString('base64'));
   return env;
 };
 const exprEnv = mkEnv(new nunjucks.FileSystemLoader('/nonexistent'));
-const ctx = { parameters: params, steps: {} };
+const ctx = { parameters: params, steps: {}, secrets: params._secrets || {} };
 const evalValue = v => {
   if (typeof v === 'string') {
     const m = v.match(/^\s*\$\{\{([\s\S]*)\}\}\s*$/);
@@ -108,7 +109,16 @@ const skelRender = (src, dst, values, replace = false) => {
   }
 };
 
+// MFT flow: tibco:call-platform-api is answered from REST responses saved as JSON (MFT_FIXTURES=<dir>, same layout as mft-fixtures/)
+const REST = { '/admin/v7/servers': 'servers.json', '/admincc/v7/pstransfers': 'pstransfers.json', '/admin/v7/protocolpublickeys': 'protocolpublickeys.json', '/admin/v7/protocolsystemkeys': 'protocolsystemkeys.json', '/admin/v7/users': 'is-users.json', '/admin/v7/transfers': 'is-transfers.json', '/admin/v7/version': 'version.json', '/admin/v7/license': 'license.json' };
+const restFixture = ep => {
+  const bare = ep.split('?')[0].replace('/cfcc/rest', ''); let f = REST[bare]; const m = bare.match(/tranferserverconfig\/(ftp|ssh)\//); if (m) f = `is-${m[1]}-config.json`;
+  const fp = f && process.env.MFT_FIXTURES && path.join(process.env.MFT_FIXTURES, f);
+  if (!fp || !fs.existsSync(fp)) throw new Error('no fixture for ' + bare);
+  return JSON.parse(fs.readFileSync(fp, 'utf8'));
+};
 for (const s of tpl.spec.steps) {
+  if (s.if !== undefined && !evalValue(s.if)) { console.log(`-> skip ${s.id} (if false)`); continue; }
   const input = s.each !== undefined ? undefined : evalValue(s.input);
   console.log(`-> step ${s.id} (${s.action})`);
   if (s.action === 'tibco:git:clone') console.log('   clone', input.repoUrl, 'branch', input.branch);
@@ -129,6 +139,13 @@ for (const s of tpl.spec.steps) {
     const dst = path.resolve(ws, input.targetPath);
     skelRender(path.resolve(templateDir, input.url), dst, input.values, input.replace === true);
     console.log('   generated into', input.targetPath);
+  }
+  else if (s.action === 'tibco:call-platform-api') {
+    if ((input.method || 'GET') !== 'GET') { console.log('   ', input.method, input.baseUrl + input.endpoint, JSON.stringify(input.body), 'auth:', String(input.headers.authorization).slice(0, 14) + '...'); ctx.steps[s.id] = { output: { status: 201, data: { id: 42 }, headers: {} } }; }
+    else {
+      try { ctx.steps[s.id] = { output: { status: 200, data: restFixture(input.endpoint), headers: { date: process.env.MFT_DATE || 'Wed, 11 Nov 2026 18:08:07 GMT' } } }; console.log('   GET', input.endpoint, 'auth:', String(input.headers.authorization).slice(0, 12) + '...'); }
+      catch (e) { console.log('   FAILED', input.endpoint, e.message); if (!s.continueOnError) throw e; }
+    }
   }
   else if (s.action === 'tibco:git:push') console.log('   push branch', input.branch, '-', input.commitMessage);
   else if (s.action === 'catalog:register') { console.log('   register', input.catalogInfoUrl); ctx.steps[s.id] = { output: { entityRef: 'component:default/x' } }; }

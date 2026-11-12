@@ -1,0 +1,42 @@
+{#@@ANALYSIS@@#}
+# MFT ${{ inst }}
+
+> Generated from a Command Center export by the DevHub MFT import flow. Regenerate by re-running the export and the import.
+
+| | |
+|---|---|
+| Command Center | ${{ ccUrl if ccUrl != "" else "n/a" }} |
+| Version | ${{ ccVersion if ccVersion != "" else "n/a" }} |
+| Exported | ${{ nowIso }} |
+| Licence expires | ${{ (licExp | truncate(10, true, "")) if licExp != "" else "n/a" }} |
+| Servers | ${{ svs.length }} |
+| Internet Server endpoints | ${{ eps.length }} |
+| Partner users | ${{ uss.length }} |
+| Certificates | ${{ certRows.length }} |
+| Platform Server transfers | ${{ pts.length }} |
+| Internet Server transfers | ${{ its.length }} |
+| Findings | ${{ findings.length }} |
+
+## Servers
+
+| Server | Type | Address | Port | Security | Earliest certificate expiry |
+|---|---|---|---|---|---|
+{%- for sv in svs %}
+| ${{ sv.n }} | ${{ sv.typ }} | ${{ sv.addr }} | ${{ sv.port }} | ${{ sv.sec }} | ${{ (sv.exp | truncate(10, true, "")) if sv.exp != "" else "-" }} |
+{%- endfor %}
+
+## Internet Server endpoints
+
+| Host | Protocol | Port | Clear text | Certificate expires |
+|---|---|---|---|---|
+{%- for ep in eps %}
+| ${{ ep.host }} | ${{ ep.proto }} | ${{ ep.port }} | ${{ "yes" if ep.insecure else "no" }} | ${{ (ep.exp | truncate(10, true, "")) if ep.exp != "" else "unknown" }} |
+{%- endfor %}
+
+## Partner users
+
+| User | Name | Protocols allowed |
+|---|---|---|
+{%- for us in uss %}
+| ${{ us.id }} | ${{ us.full }} | ${{ us.prot }} |
+{%- endfor %}

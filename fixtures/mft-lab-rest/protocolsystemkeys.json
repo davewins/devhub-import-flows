@@ -1,0 +1,50 @@
+[
+ {
+  "keyId": "KB11Q00029D0",
+  "keyType": "Platform Server",
+  "defaultKeyFlag": "Yes",
+  "description": "CC client cert mft-cc-client-20261111180533 for Platform Server TLS (lab CA)",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T18:05:33",
+  "encryptKeyLength": "3072",
+  "issuerName": "CN=Lab MFT Test Root CA, O=Lab",
+  "subjectDN": "CN=mft-cc-client-20261111180533, O=Lab",
+  "alias": "mft-cc-client-20261111180533"
+ },
+ {
+  "keyId": "KB11Q0002996",
+  "keyType": "SSH",
+  "defaultKeyFlag": "Yes",
+  "description": "IS SSH server cert (lab CA)",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T18:04:18",
+  "encryptKeyLength": "3072",
+  "issuerName": "CN=Lab MFT Test Root CA, O=Lab",
+  "subjectDN": "CN=mft-is, O=Lab",
+  "alias": "mft-is"
+ },
+ {
+  "keyId": "KB11Q000298D",
+  "keyType": "FTP",
+  "defaultKeyFlag": "Yes",
+  "description": "IS FTP server cert (lab CA)",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T18:04:18",
+  "encryptKeyLength": "3072",
+  "issuerName": "CN=Lab MFT Test Root CA, O=Lab",
+  "subjectDN": "CN=mft-is, O=Lab",
+  "alias": "mft-is"
+ },
+ {
+  "keyId": "KB11Q0002842",
+  "keyType": "HTTPS",
+  "defaultKeyFlag": "Yes",
+  "description": "IS outbound CLIENT cert mft-is-client-20261111175012 (HTTPS)",
+  "keyStatus": "Enabled",
+  "keyExpirationDate": "2027-02-09T17:50:12",
+  "encryptKeyLength": "3072",
+  "issuerName": "CN=Lab MFT Test Root CA, O=Lab",
+  "subjectDN": "CN=mft-is-client-20261111175012, O=Lab",
+  "alias": "mft-is-client-20261111175012"
+ }
+]
