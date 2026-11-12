@@ -33,12 +33,18 @@ ${{ era * 146097 + yoe * 365 + yoe // 4 - yoe // 100 + doy }}
 {%- set findings = [] -%}
 {#- Relationship model: edges flow outward from Command Center: CC -> servers / Internet Server -> listeners, partner users, transfers, certificates. -#}
 {%- set ccDeps = [] -%}
-{#- Up to four Internet Server hosts (slot 1 = isHost / isFtp / isSsh, slot 2 = isHost2 / isFtp2 / isSsh2, ...). -#}
+{#- Internet Server hosts: values.isHosts = "host[:httpsPort],host[:httpsPort],..." (up to 8; listener reads are values.isFtp1..8 / isSsh1..8). -#}
 {%- set hostDefs = [] -%}
-{%- if values.isHost -%}{%- set _ = hostDefs.push({ "h": values.isHost, "ftp": values.isFtp, "ssh": values.isSsh, "eps": [] }) -%}{%- endif -%}
-{%- if values.isHost2 -%}{%- set _ = hostDefs.push({ "h": values.isHost2, "ftp": values.isFtp2, "ssh": values.isSsh2, "eps": [] }) -%}{%- endif -%}
-{%- if values.isHost3 -%}{%- set _ = hostDefs.push({ "h": values.isHost3, "ftp": values.isFtp3, "ssh": values.isSsh3, "eps": [] }) -%}{%- endif -%}
-{%- if values.isHost4 -%}{%- set _ = hostDefs.push({ "h": values.isHost4, "ftp": values.isFtp4, "ssh": values.isSsh4, "eps": [] }) -%}{%- endif -%}
+{%- set ftpList = [values.isFtp1, values.isFtp2, values.isFtp3, values.isFtp4, values.isFtp5, values.isFtp6, values.isFtp7, values.isFtp8] -%}
+{%- set sshList = [values.isSsh1, values.isSsh2, values.isSsh3, values.isSsh4, values.isSsh5, values.isSsh6, values.isSsh7, values.isSsh8] -%}
+{%- if values.isHosts -%}
+  {%- for e in (values.isHosts | replace(" ", "")).split(",") -%}
+    {%- set hp = e.split(":") -%}
+    {%- if hp[0] != "" and loop.index0 < 8 -%}
+      {%- set _ = hostDefs.push({ "h": hp[0], "port": (hp[1] if hp.length > 1 else (values.httpsPort | default("7443") | string)), "ftp": ftpList[loop.index0], "ssh": sshList[loop.index0], "eps": [] }) -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
 {%- set isName = (((inst + "-" + "isrv" + "-" + (hostDefs[0].h)) | lower | replace(r/[^a-z0-9_.-]+/g, "-")) | truncate(63, true, "") | replace(r/^[-_.]+|[-_.]+$/g, "")) if hostDefs.length > 0 else "" -%}
 {#- Shared (cluster-wide) things every Internet Server node serves: partner users, transfers, default HTTPS key. -#}
 {%- set isDeps = [] -%}
@@ -107,7 +113,7 @@ ${{ era * 146097 + yoe * 365 + yoe // 4 - yoe // 100 + doy }}
     {%- if hd.ftp.tlsIPPort and (hd.ftp.tlsIPPort | string) != "0" -%}{%- set _ = defs.push({ "proto": "ftps", "port": hd.ftp.tlsIPPort | string, "key": "FTP", "ccc": hd.ftp.clearCommandChannel }) -%}{%- endif -%}
   {%- endif -%}
   {%- if hd.ssh and hd.ssh.enabled == "Yes" -%}{%- set _ = defs.push({ "proto": "sftp", "port": hd.ssh.ipPort | string, "key": "SSH", "ccc": "" }) -%}{%- endif -%}
-  {%- if values.includeIS != false -%}{%- set _ = defs.push({ "proto": "https", "port": values.httpsPort | default("7443") | string, "key": "", "ccc": "" }) -%}{%- endif -%}
+  {%- if values.includeIS != false -%}{%- set _ = defs.push({ "proto": "https", "port": hd.port, "key": "", "ccc": "" }) -%}{%- endif -%}
   {%- for d in defs -%}
     {%- set pr = d.proto -%}
     {%- set e = "" -%}{%- set dl = 0 -%}{%- set cid = "" -%}

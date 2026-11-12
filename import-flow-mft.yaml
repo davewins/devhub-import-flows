@@ -59,36 +59,22 @@ spec:
           type: boolean
           default: true
           description: Partner users, Internet Server transfers (inbound and outbound) and the protocol listeners.
-        isHost:
-          title: Internet Server host name
+        isHosts:
+          title: Internet Server hosts
           type: string
-          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+          pattern: '^\s*[A-Za-z0-9][A-Za-z0-9._-]*(:[0-9]{1,5})?(\s*,\s*[A-Za-z0-9][A-Za-z0-9._-]*(:[0-9]{1,5})?)*\s*$'
           description: >-
-            Only the host name the (first) Internet Server is registered under in Command Center, for example
-            tibco-mft.lab.local. No https://, no port, no path. It is used to read the FTP / FTPS / SFTP listener
-            settings (/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/<host>); a wrong name gives a 404. To see the registered
-            names open <Command Center URL>/cfcc/rest/admincc/${{ parameters.apiVersion }}/hoststats (ignore entries ending in _CC).
-            Leave empty to skip the FTP / FTPS / SFTP listeners.
-        isHost2:
-          title: Internet Server 2 host name (optional)
-          type: string
-          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
-          description: Another Internet Server registered under the same Command Center. Same rules as above.
-        isHost3:
-          title: Internet Server 3 host name (optional)
-          type: string
-          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
-          description: Another Internet Server registered under the same Command Center. Same rules as above.
-        isHost4:
-          title: Internet Server 4 host name (optional)
-          type: string
-          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
-          description: Another Internet Server registered under the same Command Center. Same rules as above.
+            Comma separated list of the Internet Servers under this Command Center, as host or host:port, for example
+            is1.example.com:7443,is2.example.com:7443. The host is the name the server is registered under in Command
+            Center (no https://, no path); a wrong name gives a 404. The optional port is that server's HTTPS port
+            (default: the HTTPS port below). Up to 8 hosts. To see the registered names open
+            <Command Center URL>/cfcc/rest/admincc/${{ parameters.apiVersion }}/hoststats (ignore entries ending in _CC). Leave empty to skip
+            the FTP / FTPS / SFTP / HTTPS listeners.
         httpsPort:
           title: Internet Server HTTPS port
           type: string
           default: '7443'
-          description: Port of the HTTPS listener (it has no REST configuration, so it is taken from here).
+          description: Default HTTPS port for hosts listed without a port (the HTTPS listener has no REST configuration).
         warnDays:
           title: Certificate warning window (days)
           type: number
@@ -376,105 +362,209 @@ spec:
         headers:
           authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
 
-    - id: ccIsFtp
-      name: Read Internet Server FTP Listener
-      if: ${{ parameters.includeIS and parameters.isHost }}
+    - id: ccIsFtp1
+      name: Read Internet Server 1 FTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 0 }}
       continueOnError: true
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ parameters.isHost }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ (((parameters.isHosts | replace(" ", "")).split(","))[0]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsSsh1
+      name: Read Internet Server 1 SFTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 0 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ (((parameters.isHosts | replace(" ", "")).split(","))[0]).split(":")[0] }}
         method: GET
         requireAuth: false
         headers:
           authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
 
     - id: ccIsFtp2
-      name: Read Internet Server FTP Listener 2
-      if: ${{ parameters.includeIS and parameters.isHost2 }}
+      name: Read Internet Server 2 FTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 1 }}
       continueOnError: true
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ parameters.isHost2 }}
-        method: GET
-        requireAuth: false
-        headers:
-          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
-
-    - id: ccIsFtp3
-      name: Read Internet Server FTP Listener 3
-      if: ${{ parameters.includeIS and parameters.isHost3 }}
-      continueOnError: true
-      action: tibco:call-platform-api
-      input:
-        baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ parameters.isHost3 }}
-        method: GET
-        requireAuth: false
-        headers:
-          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
-
-    - id: ccIsFtp4
-      name: Read Internet Server FTP Listener 4
-      if: ${{ parameters.includeIS and parameters.isHost4 }}
-      continueOnError: true
-      action: tibco:call-platform-api
-      input:
-        baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ parameters.isHost4 }}
-        method: GET
-        requireAuth: false
-        headers:
-          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
-
-    - id: ccIsSsh
-      name: Read Internet Server SFTP Listener
-      if: ${{ parameters.includeIS and parameters.isHost }}
-      continueOnError: true
-      action: tibco:call-platform-api
-      input:
-        baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ parameters.isHost }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ (((parameters.isHosts | replace(" ", "")).split(","))[1]).split(":")[0] }}
         method: GET
         requireAuth: false
         headers:
           authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
 
     - id: ccIsSsh2
-      name: Read Internet Server SFTP Listener 2
-      if: ${{ parameters.includeIS and parameters.isHost2 }}
+      name: Read Internet Server 2 SFTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 1 }}
       continueOnError: true
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ parameters.isHost2 }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ (((parameters.isHosts | replace(" ", "")).split(","))[1]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsFtp3
+      name: Read Internet Server 3 FTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 2 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ (((parameters.isHosts | replace(" ", "")).split(","))[2]).split(":")[0] }}
         method: GET
         requireAuth: false
         headers:
           authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
 
     - id: ccIsSsh3
-      name: Read Internet Server SFTP Listener 3
-      if: ${{ parameters.includeIS and parameters.isHost3 }}
+      name: Read Internet Server 3 SFTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 2 }}
       continueOnError: true
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ parameters.isHost3 }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ (((parameters.isHosts | replace(" ", "")).split(","))[2]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsFtp4
+      name: Read Internet Server 4 FTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 3 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ (((parameters.isHosts | replace(" ", "")).split(","))[3]).split(":")[0] }}
         method: GET
         requireAuth: false
         headers:
           authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
 
     - id: ccIsSsh4
-      name: Read Internet Server SFTP Listener 4
-      if: ${{ parameters.includeIS and parameters.isHost4 }}
+      name: Read Internet Server 4 SFTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 3 }}
       continueOnError: true
       action: tibco:call-platform-api
       input:
         baseUrl: ${{ parameters.ccUrl }}
-        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ parameters.isHost4 }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ (((parameters.isHosts | replace(" ", "")).split(","))[3]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsFtp5
+      name: Read Internet Server 5 FTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 4 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ (((parameters.isHosts | replace(" ", "")).split(","))[4]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsSsh5
+      name: Read Internet Server 5 SFTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 4 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ (((parameters.isHosts | replace(" ", "")).split(","))[4]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsFtp6
+      name: Read Internet Server 6 FTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 5 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ (((parameters.isHosts | replace(" ", "")).split(","))[5]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsSsh6
+      name: Read Internet Server 6 SFTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 5 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ (((parameters.isHosts | replace(" ", "")).split(","))[5]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsFtp7
+      name: Read Internet Server 7 FTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 6 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ (((parameters.isHosts | replace(" ", "")).split(","))[6]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsSsh7
+      name: Read Internet Server 7 SFTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 6 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ (((parameters.isHosts | replace(" ", "")).split(","))[6]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsFtp8
+      name: Read Internet Server 8 FTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 7 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ (((parameters.isHosts | replace(" ", "")).split(","))[7]).split(":")[0] }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsSsh8
+      name: Read Internet Server 8 SFTP Listener
+      if: ${{ parameters.includeIS and parameters.isHosts and ((parameters.isHosts | replace(" ", "")).split(",")).length > 7 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ (((parameters.isHosts | replace(" ", "")).split(","))[7]).split(":")[0] }}
         method: GET
         requireAuth: false
         headers:
@@ -526,7 +616,7 @@ spec:
           instance: ${{ parameters.instance }}
           ccUrl: ${{ parameters.ccUrl }}
           includeIS: ${{ parameters.includeIS }}
-          isHost: ${{ parameters.isHost }}
+          isHosts: ${{ parameters.isHosts }}
           httpsPort: ${{ parameters.httpsPort }}
           warnDays: ${{ parameters.warnDays }}
           ccDate: ${{ steps.ccServers.output.headers.date }}
@@ -536,17 +626,22 @@ spec:
           psTransfers: ${{ steps.ccPsTransfers.output.data }}
           users: ${{ steps.ccUsers.output.data }}
           isTransfers: ${{ steps.ccIsTransfers.output.data }}
-          isFtp: ${{ steps.ccIsFtp.output.data }}
-          isSsh: ${{ steps.ccIsSsh.output.data }}
-          isHost2: ${{ parameters.isHost2 }}
+          isFtp1: ${{ steps.ccIsFtp1.output.data }}
+          isSsh1: ${{ steps.ccIsSsh1.output.data }}
           isFtp2: ${{ steps.ccIsFtp2.output.data }}
           isSsh2: ${{ steps.ccIsSsh2.output.data }}
-          isHost3: ${{ parameters.isHost3 }}
           isFtp3: ${{ steps.ccIsFtp3.output.data }}
           isSsh3: ${{ steps.ccIsSsh3.output.data }}
-          isHost4: ${{ parameters.isHost4 }}
           isFtp4: ${{ steps.ccIsFtp4.output.data }}
           isSsh4: ${{ steps.ccIsSsh4.output.data }}
+          isFtp5: ${{ steps.ccIsFtp5.output.data }}
+          isSsh5: ${{ steps.ccIsSsh5.output.data }}
+          isFtp6: ${{ steps.ccIsFtp6.output.data }}
+          isSsh6: ${{ steps.ccIsSsh6.output.data }}
+          isFtp7: ${{ steps.ccIsFtp7.output.data }}
+          isSsh7: ${{ steps.ccIsSsh7.output.data }}
+          isFtp8: ${{ steps.ccIsFtp8.output.data }}
+          isSsh8: ${{ steps.ccIsSsh8.output.data }}
           version: ${{ steps.ccVersion.output.data }}
           license: ${{ steps.ccLicense.output.data }}
 

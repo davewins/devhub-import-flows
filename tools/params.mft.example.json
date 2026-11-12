@@ -4,7 +4,6 @@
  "ccUser": "admin",
  "ccPassword": "x",
  "includeIS": true,
- "isHost": "tibco-mft.lab.local",
  "httpsPort": "7443",
  "warnDays": 30,
  "scm": "gitea",
@@ -26,5 +25,6 @@
  "_secrets": {
   "ccPassword": "pw",
   "repoToken": "tok"
- }
+ },
+ "isHosts": "tibco-mft.lab.local:7443, is2.lab.local:8443"
 }
