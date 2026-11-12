@@ -50,10 +50,13 @@ spec:
         isHost:
           title: Internet Server host name
           type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
           description: >-
-            Host name Internet Server registered under in Command Center (the name used in
-            /admin/v7/tranferserverconfig/ftp/<host>; see Command Center, Administration, Internet Server).
-            Needed for the FTP / FTPS / SFTP listeners; leave empty to skip them.
+            Only the host name Internet Server is registered under in Command Center, for example
+            tibco-mft.lab.local. No https://, no port, no path. It is used to read the FTP / FTPS / SFTP listener
+            settings (/admin/v7/tranferserverconfig/ftp/<host>); a wrong name gives a 404. To see the registered
+            names open <Command Center URL>/cfcc/rest/admincc/v7/hoststats (ignore entries ending in _CC).
+            Leave empty to skip the FTP / FTPS / SFTP listeners.
         httpsPort:
           title: Internet Server HTTPS port
           type: string
