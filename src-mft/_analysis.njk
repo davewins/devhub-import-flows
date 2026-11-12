@@ -33,7 +33,14 @@ ${{ era * 146097 + yoe * 365 + yoe // 4 - yoe // 100 + doy }}
 {%- set findings = [] -%}
 {#- Relationship model: edges flow outward from Command Center: CC -> servers / Internet Server -> listeners, partner users, transfers, certificates. -#}
 {%- set ccDeps = [] -%}
-{%- set isName = nm(inst, "isrv", values.isHost) if values.isHost else "" -%}
+{#- Up to four Internet Server hosts (slot 1 = isHost / isFtp / isSsh, slot 2 = isHost2 / isFtp2 / isSsh2, ...). -#}
+{%- set hostDefs = [] -%}
+{%- if values.isHost -%}{%- set _ = hostDefs.push({ "h": values.isHost, "ftp": values.isFtp, "ssh": values.isSsh, "eps": [] }) -%}{%- endif -%}
+{%- if values.isHost2 -%}{%- set _ = hostDefs.push({ "h": values.isHost2, "ftp": values.isFtp2, "ssh": values.isSsh2, "eps": [] }) -%}{%- endif -%}
+{%- if values.isHost3 -%}{%- set _ = hostDefs.push({ "h": values.isHost3, "ftp": values.isFtp3, "ssh": values.isSsh3, "eps": [] }) -%}{%- endif -%}
+{%- if values.isHost4 -%}{%- set _ = hostDefs.push({ "h": values.isHost4, "ftp": values.isFtp4, "ssh": values.isSsh4, "eps": [] }) -%}{%- endif -%}
+{%- set isName = nm(inst, "isrv", hostDefs[0].h) if hostDefs.length > 0 else "" -%}
+{#- Shared (cluster-wide) things every Internet Server node serves: partner users, transfers, default HTTPS key. -#}
 {%- set isDeps = [] -%}
 {#- ---- licence ---- -#}
 {%- set licExp = "" -%}{%- set licDl = 0 -%}
@@ -89,17 +96,17 @@ ${{ era * 146097 + yoe * 365 + yoe // 4 - yoe // 100 + doy }}
   {%- endif -%}
 {%- endfor -%}
 {%- for sv in svs -%}{%- set _ = ccDeps.push("resource:default/" + sv.name) -%}{%- endfor -%}
-{%- if isName != "" -%}{%- set _ = ccDeps.push("resource:default/" + isName) -%}{%- endif -%}
+{%- for hd in hostDefs -%}{%- set _ = ccDeps.push("resource:default/" + nm(inst, "isrv", hd.h)) -%}{%- endfor -%}
 {#- ---- internet server protocol endpoints ---- -#}
 {%- set eps = [] -%}
-{%- if values.isHost -%}
-  {%- set h = values.isHost -%}
+{%- for hd in hostDefs -%}
+  {%- set h = hd.h -%}
   {%- set defs = [] -%}
-  {%- if values.isFtp and values.isFtp.enabled == "Yes" -%}
-    {%- if values.isFtp.sslOnlyConnections != "Yes" -%}{%- set _ = defs.push({ "proto": "ftp", "port": values.isFtp.ipPort | string, "key": "", "ccc": "" }) -%}{%- endif -%}
-    {%- if values.isFtp.tlsIPPort and (values.isFtp.tlsIPPort | string) != "0" -%}{%- set _ = defs.push({ "proto": "ftps", "port": values.isFtp.tlsIPPort | string, "key": "FTP", "ccc": values.isFtp.clearCommandChannel }) -%}{%- endif -%}
+  {%- if hd.ftp and hd.ftp.enabled == "Yes" -%}
+    {%- if hd.ftp.sslOnlyConnections != "Yes" -%}{%- set _ = defs.push({ "proto": "ftp", "port": hd.ftp.ipPort | string, "key": "", "ccc": "" }) -%}{%- endif -%}
+    {%- if hd.ftp.tlsIPPort and (hd.ftp.tlsIPPort | string) != "0" -%}{%- set _ = defs.push({ "proto": "ftps", "port": hd.ftp.tlsIPPort | string, "key": "FTP", "ccc": hd.ftp.clearCommandChannel }) -%}{%- endif -%}
   {%- endif -%}
-  {%- if values.isSsh and values.isSsh.enabled == "Yes" -%}{%- set _ = defs.push({ "proto": "sftp", "port": values.isSsh.ipPort | string, "key": "SSH", "ccc": "" }) -%}{%- endif -%}
+  {%- if hd.ssh and hd.ssh.enabled == "Yes" -%}{%- set _ = defs.push({ "proto": "sftp", "port": hd.ssh.ipPort | string, "key": "SSH", "ccc": "" }) -%}{%- endif -%}
   {%- if values.includeIS != false -%}{%- set _ = defs.push({ "proto": "https", "port": values.httpsPort | default("7443") | string, "key": "", "ccc": "" }) -%}{%- endif -%}
   {%- for d in defs -%}
     {%- set pr = d.proto -%}
@@ -112,9 +119,9 @@ ${{ era * 146097 + yoe * 365 + yoe // 4 - yoe // 100 + doy }}
     {%- if d.ccc == "Yes" -%}{%- set _ = tags.push("clear-command-channel") -%}{%- set _ = findings.push({ "sev": "medium", "entity": nm(inst, "ep", h + "-" + pr), "text": "FTPS on " + h + " allows a clear command channel" }) -%}{%- endif -%}
     {%- if st != "" -%}{%- set _ = tags.push("cert-" + st) -%}{%- endif -%}
     {%- if pr == "https" -%}{%- set _ = findings.push({ "sev": "low", "entity": nm(inst, "ep", h + "-" + pr), "text": "HTTPS listener " + h + ":" + d.port + ": the certificate lives in the Tomcat keystore, not in REST, so its expiry is not tracked" }) -%}{%- endif -%}
-    {%- set _ = eps.push({ "name": nm(inst, "ep", h + "-" + pr), "host": h, "proto": pr, "port": d.port, "insecure": pr == "ftp", "exp": e, "dl": dl, "certId": cid, "tags": tags }) -%}{%- set _ = isDeps.push("resource:default/" + nm(inst, "ep", h + "-" + pr)) -%}
+    {%- set _ = eps.push({ "name": nm(inst, "ep", h + "-" + pr), "host": h, "proto": pr, "port": d.port, "insecure": pr == "ftp", "exp": e, "dl": dl, "certId": cid, "tags": tags }) -%}{%- set _ = hd.eps.push("resource:default/" + nm(inst, "ep", h + "-" + pr)) -%}
   {%- endfor -%}
-{%- endif -%}
+  {%- endfor -%}
 {%- if isName != "" -%}{%- for c in certRows -%}{%- if c.kind == "system" and c.isDefault and c.type == "HTTPS" -%}{%- set _ = isDeps.push("resource:default/" + c.name) -%}{%- endif -%}{%- endfor -%}{%- endif -%}
 {#- ---- partner users ---- -#}
 {%- set uss = [] -%}

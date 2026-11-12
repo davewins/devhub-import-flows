@@ -64,11 +64,26 @@ spec:
           type: string
           pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
           description: >-
-            Only the host name Internet Server is registered under in Command Center, for example
+            Only the host name the (first) Internet Server is registered under in Command Center, for example
             tibco-mft.lab.local. No https://, no port, no path. It is used to read the FTP / FTPS / SFTP listener
             settings (/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/<host>); a wrong name gives a 404. To see the registered
             names open <Command Center URL>/cfcc/rest/admincc/${{ parameters.apiVersion }}/hoststats (ignore entries ending in _CC).
             Leave empty to skip the FTP / FTPS / SFTP listeners.
+        isHost2:
+          title: Internet Server 2 host name (optional)
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+          description: Another Internet Server registered under the same Command Center. Same rules as above.
+        isHost3:
+          title: Internet Server 3 host name (optional)
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+          description: Another Internet Server registered under the same Command Center. Same rules as above.
+        isHost4:
+          title: Internet Server 4 host name (optional)
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+          description: Another Internet Server registered under the same Command Center. Same rules as above.
         httpsPort:
           title: Internet Server HTTPS port
           type: string
@@ -374,6 +389,45 @@ spec:
         headers:
           authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
 
+    - id: ccIsFtp2
+      name: Read Internet Server FTP Listener 2
+      if: ${{ parameters.includeIS and parameters.isHost2 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ parameters.isHost2 }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsFtp3
+      name: Read Internet Server FTP Listener 3
+      if: ${{ parameters.includeIS and parameters.isHost3 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ parameters.isHost3 }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsFtp4
+      name: Read Internet Server FTP Listener 4
+      if: ${{ parameters.includeIS and parameters.isHost4 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ftp/${{ parameters.isHost4 }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
     - id: ccIsSsh
       name: Read Internet Server SFTP Listener
       if: ${{ parameters.includeIS and parameters.isHost }}
@@ -382,6 +436,45 @@ spec:
       input:
         baseUrl: ${{ parameters.ccUrl }}
         endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ parameters.isHost }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsSsh2
+      name: Read Internet Server SFTP Listener 2
+      if: ${{ parameters.includeIS and parameters.isHost2 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ parameters.isHost2 }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsSsh3
+      name: Read Internet Server SFTP Listener 3
+      if: ${{ parameters.includeIS and parameters.isHost3 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ parameters.isHost3 }}
+        method: GET
+        requireAuth: false
+        headers:
+          authorization: ${{ "Basic " + ((parameters.ccUser + ":" + secrets.ccPassword) | encodeBase64) }}
+
+    - id: ccIsSsh4
+      name: Read Internet Server SFTP Listener 4
+      if: ${{ parameters.includeIS and parameters.isHost4 }}
+      continueOnError: true
+      action: tibco:call-platform-api
+      input:
+        baseUrl: ${{ parameters.ccUrl }}
+        endpoint: /cfcc/rest/admin/${{ parameters.apiVersion }}/tranferserverconfig/ssh/${{ parameters.isHost4 }}
         method: GET
         requireAuth: false
         headers:
@@ -445,6 +538,15 @@ spec:
           isTransfers: ${{ steps.ccIsTransfers.output.data }}
           isFtp: ${{ steps.ccIsFtp.output.data }}
           isSsh: ${{ steps.ccIsSsh.output.data }}
+          isHost2: ${{ parameters.isHost2 }}
+          isFtp2: ${{ steps.ccIsFtp2.output.data }}
+          isSsh2: ${{ steps.ccIsSsh2.output.data }}
+          isHost3: ${{ parameters.isHost3 }}
+          isFtp3: ${{ steps.ccIsFtp3.output.data }}
+          isSsh3: ${{ steps.ccIsSsh3.output.data }}
+          isHost4: ${{ parameters.isHost4 }}
+          isFtp4: ${{ steps.ccIsFtp4.output.data }}
+          isSsh4: ${{ steps.ccIsSsh4.output.data }}
           version: ${{ steps.ccVersion.output.data }}
           license: ${{ steps.ccLicense.output.data }}
 

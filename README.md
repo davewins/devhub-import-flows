@@ -285,7 +285,9 @@ push → register pattern as the BusinessWorks flows, with two differences: the 
 target repository can be **created or updated**.
 
 1. **Command Center page**: REST API version (`v7` for MFT 8.7; other versions untested), URL, user and password (a scaffolder secret, never written anywhere), whether to include
-   Internet Server definitions, the Internet Server host name (for the FTP / FTPS / SFTP listeners), HTTPS port, warning window.
+   Internet Server definitions, the Internet Server host name(s) (up to four, all under the one Command Center; used for the FTP / FTPS / SFTP listeners), the HTTPS port (shared), warning window.
+   Each Internet Server host becomes its own `mft-internet-server` Resource with its own listeners. Partner users, Internet Server
+   transfers and the default HTTPS key are shared across the cluster, so they are linked from every Internet Server node.
 2. **Repository page**: git provider (GitHub, GitLab, Bitbucket Cloud, Bitbucket Server / Data Center, Gitea / Forgejo; cloud or
    self-hosted), repository, branch, output folder, and **Use an existing repository (update it)** or **Create the repository**.
    Creating needs an API token (a secret used for the one call) and works for GitHub (user or organisation), GitLab (user or

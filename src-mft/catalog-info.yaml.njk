@@ -42,25 +42,26 @@ spec:
 {%- if ccDeps.length > 0 %}
   dependsOn: ${{ ccDeps | dump }}
 {%- endif %}
-{%- if isName != "" %}
+{%- for hd in hostDefs %}
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: ${{ isName | dump }}
-  title: ${{ ("Internet Server " + values.isHost) | dump }}
-  description: ${{ ("TIBCO MFT Internet Server " + values.isHost + ": partner-facing FTP / FTPS / SFTP / HTTPS gateway") | dump }}
+  name: ${{ nm(inst, "isrv", hd.h) | dump }}
+  title: ${{ ("Internet Server " + hd.h) | dump }}
+  description: ${{ ("TIBCO MFT Internet Server " + hd.h + ": partner-facing FTP / FTPS / SFTP / HTTPS gateway") | dump }}
   tags: ["mft-internet-server"]
   annotations:
     mft/instance: ${{ inst | dump }}
-    mft/host: ${{ values.isHost | dump }}
+    mft/host: ${{ hd.h | dump }}
 spec:
   type: mft-internet-server
   owner: ${{ values.owner | dump }}
-{%- if isDeps.length > 0 %}
-  dependsOn: ${{ isDeps | dump }}
+{%- set allDeps = [] %}{%- for x in hd.eps %}{%- set _ = allDeps.push(x) %}{%- endfor %}{%- for x in isDeps %}{%- set _ = allDeps.push(x) %}{%- endfor %}
+{%- if allDeps.length > 0 %}
+  dependsOn: ${{ allDeps | dump }}
 {%- endif %}
-{%- endif %}
+{%- endfor %}
 {%- for sv in svs %}
 ---
 apiVersion: backstage.io/v1alpha1
